@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Briefcase, Lock, Unlock, Mail, Phone, Clock, DollarSign, Filter, CheckCircle2, ShieldCheck, Sparkles, CreditCard, ArrowRight } from './icons';
+import React, { useState, useEffect } from 'react';
+import { Briefcase, Lock, Unlock, Mail, Phone, Clock, DollarSign, Filter, CheckCircle2, ShieldCheck, Sparkles, CreditCard, ArrowRight, AlertCircle } from './icons';
 import { MarketplaceCase, PracticeArea, Jurisdiction, LegalProfessional } from '../types';
 import { lawyerSelectStore } from '../services/lawyerSelectStore';
 import { initiateLeadPurchaseCheckout } from '../services/stripeClient';
+import { useAuth } from '../context/AuthContext';
 
 interface MarketplaceCaseBoardProps {
   cases: MarketplaceCase[];
@@ -15,11 +16,13 @@ export const MarketplaceCaseBoard: React.FC<MarketplaceCaseBoardProps> = ({
   currentLawyer,
   onOpenChatWithClient,
 }) => {
+  const { currentUser, role, setShowAuthModal } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedJurisdiction, setSelectedJurisdiction] = useState<string>('All');
   const [purchasingCaseId, setPurchasingCaseId] = useState<string | null>(null);
   const [checkoutModalCase, setCheckoutModalCase] = useState<MarketplaceCase | null>(null);
   const [purchaseSuccessMessage, setPurchaseSuccessMessage] = useState<string>('');
+  const [checkoutError, setCheckoutError] = useState<string>('');
 
   const categories = [
     'All',
@@ -41,13 +44,40 @@ export const MarketplaceCaseBoard: React.FC<MarketplaceCaseBoardProps> = ({
     return true;
   });
 
+  // Check if returning from Stripe checkout (success or cancel)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment_success') === 'true' && params.get('case_id')) {
+      const caseId = params.get('case_id')!;
+      setPurchaseSuccessMessage(`Payment confirmed via Stripe! Case #${caseId.slice(0, 8)} client details unlocked.`);
+      const timer = setTimeout(() => setPurchaseSuccessMessage(''), 8000);
+      return () => clearTimeout(timer);
+    }
+    if (params.get('payment_cancelled') === 'true') {
+      setCheckoutError('Stripe checkout was cancelled. No charges were incurred.');
+      const timer = setTimeout(() => setCheckoutError(''), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   const handleOpenStripeCheckout = (c: MarketplaceCase) => {
+    // Access control: only authenticated legal practitioners can initiate lead purchase
+    if (role !== 'lawyer') {
+      setShowAuthModal(true);
+      return;
+    }
+    setCheckoutError('');
     setCheckoutModalCase(c);
   };
 
   const handleConfirmPurchase = async () => {
     if (!checkoutModalCase) return;
+    if (role !== 'lawyer') {
+      setCheckoutError('Access restricted: Only verified Australian legal practitioners can acquire client leads.');
+      return;
+    }
 
+    setCheckoutError('');
     setPurchasingCaseId(checkoutModalCase.id);
     try {
       // Execute Stripe Lead Checkout flow
@@ -59,22 +89,15 @@ export const MarketplaceCaseBoard: React.FC<MarketplaceCaseBoardProps> = ({
         currentLawyer.email
       );
 
-      // Finalize store purchase
-      const updatedCase = lawyerSelectStore.purchaseCaseLead(
-        checkoutModalCase.id,
-        currentLawyer.id,
-        currentLawyer.fullName
-      );
-
-      if (updatedCase) {
-        setPurchaseSuccessMessage(`Successfully purchased Case #${checkoutModalCase.id.slice(0, 8)}! Client contact details unlocked.`);
-        setTimeout(() => setPurchaseSuccessMessage(''), 6000);
+      if (!checkoutRes.success || !checkoutRes.checkoutUrl) {
+        throw new Error(checkoutRes.error || 'Failed to create Stripe Checkout session');
       }
+
+      // Redirect directly to Stripe-hosted checkout page
+      window.location.href = checkoutRes.checkoutUrl;
     } catch (err: any) {
-      alert('Purchase failed: ' + err.message);
-    } finally {
       setPurchasingCaseId(null);
-      setCheckoutModalCase(null);
+      setCheckoutError(err.message || 'Payment server unreachable. Payment was not processed.');
     }
   };
 
@@ -116,6 +139,24 @@ export const MarketplaceCaseBoard: React.FC<MarketplaceCaseBoardProps> = ({
         }}>
           <CheckCircle2 size={20} />
           <span style={{ fontWeight: 600 }}>{purchaseSuccessMessage}</span>
+        </div>
+      )}
+
+      {/* Failure / Cancellation Notification */}
+      {checkoutError && !checkoutModalCase && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.15)',
+          border: '1px solid rgba(239, 68, 68, 0.35)',
+          borderRadius: 'var(--radius-md)',
+          padding: '1rem 1.25rem',
+          color: '#f87171',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          marginBottom: '2rem',
+        }}>
+          <AlertCircle size={20} />
+          <span style={{ fontWeight: 600 }}>{checkoutError}</span>
         </div>
       )}
 
@@ -252,75 +293,109 @@ export const MarketplaceCaseBoard: React.FC<MarketplaceCaseBoardProps> = ({
               </div>
 
               {/* ========================================================= */}
-              {/* RESTRICTED CONFIDENTIAL DOSSIER (Appears once purchased)  */}
+              {/* RESTRICTED CONFIDENTIAL DOSSIER (Purchaser Only)          */}
               {/* ========================================================= */}
               {isClaimed && (
-                <div style={{
-                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(10, 14, 23, 0.8) 100%)',
-                  border: '1px solid rgba(16, 185, 129, 0.35)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '1.25rem',
-                  marginTop: '1.25rem',
-                  marginBottom: '1.25rem',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#34d399', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
-                    <Unlock size={16} />
-                    <span>Confidential Client Dossier Unlocked (Claimed by {caseItem.claimedByName || 'You'})</span>
-                  </div>
+                (() => {
+                  const currentViewerLawyerId = currentUser?.role === 'lawyer'
+                    ? (currentUser.lawyerProfileId || currentUser.uid || currentLawyer?.id)
+                    : undefined;
+                  const isClaimedByCurrentViewer = Boolean(currentViewerLawyerId) && caseItem.claimedBy === currentViewerLawyerId;
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-                    <div>
-                      <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>Client Name:</span>
-                      <p style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff' }}>{caseItem.clientFullName}</p>
+                  if (isClaimedByCurrentViewer && caseItem.clientFullName) {
+                    return (
+                      <div style={{
+                        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(10, 14, 23, 0.8) 100%)',
+                        border: '1px solid rgba(16, 185, 129, 0.35)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '1.25rem',
+                        marginTop: '1.25rem',
+                        marginBottom: '1.25rem',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#34d399', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
+                          <Unlock size={16} />
+                          <span>Confidential Client Dossier Unlocked (Acquired by You)</span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                          <div>
+                            <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>Client Name:</span>
+                            <p style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff' }}>{caseItem.clientFullName}</p>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>Client Email:</span>
+                            <p style={{ fontSize: '0.95rem', fontWeight: 600, color: '#60a5fa' }}>{caseItem.clientEmail}</p>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>Client Phone:</span>
+                            <p style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--gold-light)' }}>{caseItem.clientPhone}</p>
+                          </div>
+                        </div>
+
+                        {caseItem.fullFactualDetails && (
+                          <div style={{ marginBottom: '1rem' }}>
+                            <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>Unredacted Client Statement of Facts:</span>
+                            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', marginTop: '0.25rem' }}>
+                              {caseItem.fullFactualDetails}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Direct Contact Actions for Purchaser */}
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', paddingTop: '0.5rem' }}>
+                          <a
+                            href={`mailto:${caseItem.clientEmail}?subject=Regarding Your Legal Dispute: ${encodeURIComponent(caseItem.title)}&body=Dear ${encodeURIComponent(caseItem.clientFullName || 'Client')},%0D%0A%0D%0AI have reviewed your legal matter on Lawyer Select and would be pleased to assist.`}
+                            className="btn-gold"
+                            style={{ padding: '0.55rem 1.1rem', fontSize: '0.85rem' }}
+                          >
+                            <Mail size={15} />
+                            <span>Email Client Directly</span>
+                          </a>
+
+                          <a
+                            href={`tel:${caseItem.clientPhone}`}
+                            className="btn-ghost"
+                            style={{ padding: '0.55rem 1.1rem', fontSize: '0.85rem' }}
+                          >
+                            <Phone size={15} />
+                            <span>Call Client ({caseItem.clientPhone})</span>
+                          </a>
+
+                          <button
+                            onClick={() => onOpenChatWithClient(caseItem)}
+                            className="btn-ghost"
+                            style={{ padding: '0.55rem 1.1rem', fontSize: '0.85rem' }}
+                          >
+                            <span>Open Direct Chat Interaction</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Non-purchaser view: confidential PII is completely shielded
+                  return (
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '0.85rem 1.25rem',
+                      marginTop: '1rem',
+                      marginBottom: '1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
+                        <Lock size={15} style={{ color: 'var(--gold-light)' }} />
+                        <span>Matter exclusively acquired by <strong>{caseItem.claimedByName || 'Practitioner'}</strong>. Client PII is confidential under APP 11.</span>
+                      </div>
+                      <span className="badge-gold">Exclusively Claimed</span>
                     </div>
-                    <div>
-                      <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>Client Email:</span>
-                      <p style={{ fontSize: '0.95rem', fontWeight: 600, color: '#60a5fa' }}>{caseItem.clientEmail}</p>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>Client Phone:</span>
-                      <p style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--gold-light)' }}>{caseItem.clientPhone}</p>
-                    </div>
-                  </div>
-
-                  {caseItem.fullFactualDetails && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>Unredacted Client Statement of Facts:</span>
-                      <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', marginTop: '0.25rem' }}>
-                        {caseItem.fullFactualDetails}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Direct Contact Actions */}
-                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', paddingTop: '0.5rem' }}>
-                    <a
-                      href={`mailto:${caseItem.clientEmail}?subject=Regarding Your Legal Dispute: ${encodeURIComponent(caseItem.title)}&body=Dear ${encodeURIComponent(caseItem.clientFullName || 'Client')},%0D%0A%0D%0AI have reviewed your legal matter on Lawyer Select and would be pleased to assist.`}
-                      className="btn-gold"
-                      style={{ padding: '0.55rem 1.1rem', fontSize: '0.85rem' }}
-                    >
-                      <Mail size={15} />
-                      <span>Email Client Directly</span>
-                    </a>
-
-                    <a
-                      href={`tel:${caseItem.clientPhone}`}
-                      className="btn-ghost"
-                      style={{ padding: '0.55rem 1.1rem', fontSize: '0.85rem' }}
-                    >
-                      <Phone size={15} />
-                      <span>Call Client ({caseItem.clientPhone})</span>
-                    </a>
-
-                    <button
-                      onClick={() => onOpenChatWithClient(caseItem)}
-                      className="btn-ghost"
-                      style={{ padding: '0.55rem 1.1rem', fontSize: '0.85rem' }}
-                    >
-                      <span>Open Direct Chat Interaction</span>
-                    </button>
-                  </div>
-                </div>
+                  );
+                })()
               )}
 
               {/* Action Footer if not yet claimed */}
@@ -330,15 +405,35 @@ export const MarketplaceCaseBoard: React.FC<MarketplaceCaseBoardProps> = ({
                     🔒 PII redacted. Acquiring this case transfers exclusive client contact rights.
                   </div>
 
-                  <button
-                    onClick={() => handleOpenStripeCheckout(caseItem)}
-                    className="btn-gold"
-                    style={{ padding: '0.65rem 1.4rem' }}
-                  >
-                    <CreditCard size={16} />
-                    <span>Purchase Lead for $20 (Flat Fee)</span>
-                    <ArrowRight size={14} />
-                  </button>
+                  {role === 'lawyer' ? (
+                    <button
+                      onClick={() => handleOpenStripeCheckout(caseItem)}
+                      className="btn-gold"
+                      style={{ padding: '0.65rem 1.4rem' }}
+                    >
+                      <CreditCard size={16} />
+                      <span>Purchase Lead for $20 (Flat Fee)</span>
+                      <ArrowRight size={14} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setShowAuthModal(true)}
+                      className="btn-ghost"
+                      style={{
+                        padding: '0.55rem 1.1rem',
+                        fontSize: '0.82rem',
+                        border: '1px solid var(--border-gold)',
+                        color: 'var(--gold-light)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                      }}
+                      title="Only verified Australian legal practitioners may acquire client leads"
+                    >
+                      <Lock size={14} />
+                      <span>Practitioner Sign In to Unlock ($20)</span>
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -391,6 +486,25 @@ export const MarketplaceCaseBoard: React.FC<MarketplaceCaseBoardProps> = ({
                 {checkoutModalCase.category} • {checkoutModalCase.jurisdiction}
               </p>
             </div>
+
+            {/* Error Notification inside modal */}
+            {checkoutError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.75rem 1rem',
+                color: '#f87171',
+                fontSize: '0.84rem',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+              }}>
+                <AlertCircle size={16} />
+                <span>{checkoutError}</span>
+              </div>
+            )}
 
             {/* Price breakdown */}
             <div style={{ borderTop: '1px solid var(--border-subtle)', borderBottom: '1px solid var(--border-subtle)', padding: '0.85rem 0', marginBottom: '1.5rem', fontSize: '0.9rem' }}>

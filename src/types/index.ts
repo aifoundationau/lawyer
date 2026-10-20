@@ -1,62 +1,96 @@
-// Domain Data Types for Lawyer Select (#lawyerselect)
-// Conforms to data-contracts.md
+// Domain data types for Lawyer Select (#lawyerselect). Field names follow data-contracts.md.
+// The value lists below are the single source for dropdowns, filters and validation.
 
-export type LegalTitle =
-  | 'Solicitor'
-  | 'Barrister'
-  | 'Conveyancer'
-  | 'Paralegal'
-  | 'Mediator'
-  | 'Patent Attorney'
-  | 'Notary Public'
-  | 'Migration Agent'
-  | 'Arbitrator'
-  | 'Legal Consultant';
+export const LEGAL_TITLES = [
+  'Solicitor',
+  'Barrister',
+  'Conveyancer',
+  'Paralegal',
+  'Mediator',
+  'Patent Attorney',
+  'Notary Public',
+  'Migration Agent',
+  'Arbitrator',
+  'Legal Consultant',
+] as const;
+export type LegalTitle = (typeof LEGAL_TITLES)[number];
 
-export type Jurisdiction =
-  | 'NSW'
-  | 'VIC'
-  | 'QLD'
-  | 'WA'
-  | 'SA'
-  | 'TAS'
-  | 'ACT'
-  | 'NT'
-  | 'Federal';
+export const JURISDICTIONS = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT', 'Federal'] as const;
+export type Jurisdiction = (typeof JURISDICTIONS)[number];
 
-export type PracticeArea =
-  | 'Family Law'
-  | 'Criminal Law'
-  | 'Commercial & Corporate'
-  | 'Property & Conveyancing'
-  | 'Immigration Law'
-  | 'Employment & Workplace'
-  | 'Wills & Estates'
-  | 'Intellectual Property'
-  | 'Personal Injury'
-  | 'Civil Litigation'
-  | 'Tax Law'
-  | 'Defamation & Media'
-  | 'Building & Construction'
-  | 'Administrative Law';
+export const PRACTICE_AREAS = [
+  'Family Law',
+  'Criminal Law',
+  'Commercial & Corporate',
+  'Property & Conveyancing',
+  'Immigration Law',
+  'Employment & Workplace',
+  'Wills & Estates',
+  'Intellectual Property',
+  'Personal Injury',
+  'Civil Litigation',
+  'Tax Law',
+  'Defamation & Media',
+  'Building & Construction',
+  'Administrative Law',
+] as const;
+export type PracticeArea = (typeof PRACTICE_AREAS)[number];
 
-export type FeeStructure =
-  | 'Fixed Fee'
-  | 'Hourly Rate'
-  | 'No Win No Fee'
-  | 'Retainer'
-  | 'Conditional'
-  | 'Free Consultation';
+export const FEE_STRUCTURES = [
+  'Hourly Rate',
+  'Fixed Fee',
+  'No Win No Fee',
+  'Retainer',
+  'Conditional',
+  'Free Consultation',
+] as const;
+export type FeeStructure = (typeof FEE_STRUCTURES)[number];
 
-export type UrgencyLevel =
-  | 'Immediate (24h)'
-  | 'Urgent (2-3 Days)'
-  | 'Standard (1-2 Weeks)'
-  | 'Exploratory / Planning';
+// Stored values follow data-contracts.md; the labels are what people see.
+export const URGENCY_LEVELS = ['Immediate (24h)', 'Urgent (2-3 Days)', 'Standard', 'Exploratory'] as const;
+export type UrgencyLevel = (typeof URGENCY_LEVELS)[number];
+export const URGENCY_LABELS: Record<UrgencyLevel, string> = {
+  'Immediate (24h)': 'Immediate (within 24 hours)',
+  'Urgent (2-3 Days)': 'Urgent (2–3 days)',
+  Standard: 'Standard (1–2 weeks)',
+  Exploratory: 'Exploratory / planning',
+};
 
+export type ProfessionalStatus = 'active' | 'pending_review' | 'suspended';
+
+/** Public directory profile: legal_professionals/{uid}. Only the server writes it. */
 export interface LegalProfessional {
-  id: string;
+  id: string; // the practitioner's Firebase Auth uid
   tag: 'lawyerselect';
+  source: 'lawyerselect';
+  fullName: string;
+  title: LegalTitle;
+  firmName: string;
+  jurisdictions: Jurisdiction[];
+  practiceAreas: PracticeArea[];
+  yearsOfExperience: number;
+  barOrRegistrationNumber: string;
+  bio: string;
+  feeStructure: FeeStructure;
+  hourlyRateAud: number | null; // null when the practitioner hasn't stated a rate
+  locationCity: string;
+  locationPostcode: string;
+  avatarUrl?: string;
+  isVerified: boolean;
+  status: ProfessionalStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Private contact details: legal_professionals/{uid}/private/contact (the owner and the server only). */
+export interface ProfessionalContact {
+  email: string;
+  phone: string;
+  updatedAt: string;
+}
+
+/** What a practitioner submits when creating or editing their profile. */
+export interface ProfessionalProfileInput {
   fullName: string;
   title: LegalTitle;
   firmName: string;
@@ -68,14 +102,13 @@ export interface LegalProfessional {
   barOrRegistrationNumber: string;
   bio: string;
   feeStructure: FeeStructure;
-  hourlyRateAud: number;
+  hourlyRateAud: number | null;
   locationCity: string;
   locationPostcode: string;
-  avatarUrl?: string;
-  isVerified: boolean;
-  status: 'active' | 'pending_review' | 'suspended';
-  createdAt: string;
 }
+
+/** AI-extracted suggestions. A field is left out when the text didn't state it. */
+export type ProfessionalProfileDraft = Partial<ProfessionalProfileInput>;
 
 export interface MatchedProfessionalResult {
   professional: LegalProfessional;
@@ -83,27 +116,18 @@ export interface MatchedProfessionalResult {
   matchRationale: string;
 }
 
-export interface ClientInquiry {
-  id: string;
-  tag: 'lawyerselect';
-  clientName: string;
-  clientEmail: string;
-  clientPhone: string;
-  legalIssueDescription: string;
-  category: PracticeArea;
-  locationState: Jurisdiction;
-  locationSuburb: string;
-  urgency: UrgencyLevel;
-  budgetExpectation: string;
-  preferredProfession?: LegalTitle | 'Any Qualified Legal Professional';
-  createdAt: string;
+export interface MatchResponse {
+  matches: MatchedProfessionalResult[];
+  method: 'ai' | 'keyword';
 }
 
+export type CaseStatus = 'open' | 'claimed' | 'closed';
+
+/** Public, redacted case: marketplace_cases/{caseId}. Contains no personal details. */
 export interface MarketplaceCase {
   id: string;
   tag: 'lawyerselect';
-  
-  // Public Section (APP 11 Redacted)
+  source: 'lawyerselect';
   title: string;
   category: PracticeArea;
   jurisdiction: Jurisdiction;
@@ -111,17 +135,35 @@ export interface MarketplaceCase {
   anonymousSummary: string;
   keyAssistanceRequired: string;
   estimatedBudget: string;
-  status: 'open' | 'claimed' | 'closed';
+  status: CaseStatus;
   postedAt: string;
+  updatedAt: string;
+  claimedAt?: string | null;
+}
 
-  // Confidential Dossier (Unlocked only after $20 purchase)
-  clientFullName?: string;
-  clientEmail?: string;
-  clientPhone?: string;
-  fullFactualDetails?: string;
-  claimedBy?: string; // legalProfessionalId
-  claimedByName?: string;
-  claimedAt?: string;
+/**
+ * Confidential dossier: marketplace_cases/{caseId}/private/dossier.
+ * Readable only by the client who posted the case and the one practitioner who paid for it.
+ */
+export interface CaseDossier {
+  caseId: string;
+  tag: 'lawyerselect';
+  source: 'lawyerselect';
+  clientUid: string;
+  clientFullName: string;
+  clientEmail: string;
+  clientPhone: string;
+  fullFactualDetails: string;
+  purchaserUid: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A case the signed-in practitioner has paid for, with its dossier. */
+export interface UnlockedLead {
+  purchase: CasePurchase;
+  caseItem: MarketplaceCase | null;
+  dossier: CaseDossier | null;
 }
 
 export interface ChatMessage {
@@ -134,32 +176,44 @@ export interface ChatMessage {
   read: boolean;
 }
 
+/** chat_interactions/{chatId}; messages live in the messages subcollection. */
 export interface ChatInteraction {
   id: string;
   tag: 'lawyerselect';
+  source: 'lawyerselect';
   clientId: string;
-  clientName: string;
-  clientEmail: string;
   lawyerId: string;
+  participants: string[];
+  clientName: string;
   lawyerName: string;
   lawyerTitle: string;
   lawyerFirm: string;
-  lawyerAvatar?: string;
-  caseId?: string;
+  caseId: string | null;
   status: 'active' | 'closed';
   lastMessageSnippet: string;
   lastMessageAt: string;
-  messages: ChatMessage[];
+  lastMessageSenderId: string | null;
+  lastReadAt: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
 }
 
+export type PurchaseStatus = 'initiated' | 'completed' | 'failed' | 'refunded';
+
+/** case_purchases/{stripeSessionId}. Only the server writes it. */
 export interface CasePurchase {
   id: string;
   tag: 'lawyerselect';
+  source: 'lawyerselect';
   caseId: string;
   legalProfessionalId: string;
   amount: number; // 2000 cents = $20.00 AUD
   currency: 'aud';
-  status: 'completed' | 'pending' | 'failed';
-  stripeSessionId?: string;
+  status: PurchaseStatus;
+  stripeSessionId: string;
+  stripePaymentIntentId?: string | null;
+  clientNotificationSent: boolean;
   createdAt: string;
+  completedAt?: string | null;
+  updatedAt: string;
 }

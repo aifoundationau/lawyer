@@ -11,8 +11,11 @@ import { LegalCorpusExplorer } from './components/LegalCorpusExplorer';
 import { lawyerSelectStore } from './services/lawyerSelectStore';
 import { LegalProfessional, MarketplaceCase, ChatInteraction } from './types';
 import { Scale, ShieldCheck, Lock, Sparkles, Heart } from './components/icons';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthModal } from './components/AuthModal';
 
-export default function App() {
+function AppContent() {
+  const { currentUser, role } = useAuth();
   const [activeTab, setActiveTab] = useState<ActiveTab>('matchmaker');
   const [userPersona, setUserPersona] = useState<UserPersona>('client');
   const [professionals, setProfessionals] = useState<LegalProfessional[]>([]);
@@ -20,11 +23,29 @@ export default function App() {
   const [chatInteractions, setChatInteractions] = useState<ChatInteraction[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
+  // Sync user persona tab view when user role updates
+  useEffect(() => {
+    if (currentUser?.role === 'lawyer') {
+      setUserPersona('lawyer');
+    } else if (currentUser?.role === 'client') {
+      setUserPersona('client');
+    }
+  }, [currentUser?.role]);
+
+  // Current active lawyer for the "Legal Pro" persona view (bound to authenticated user if lawyer)
+  const currentLawyer = (currentUser?.lawyerProfileId 
+    ? professionals.find((p) => p.id === currentUser.lawyerProfileId)
+    : undefined) || professionals.find((p) => p.id === 'lp_elena_vance') || professionals[0];
+
+  const activeLawyerId = currentUser?.role === 'lawyer'
+    ? (currentUser.lawyerProfileId || currentUser.uid || currentLawyer?.id)
+    : undefined;
+
   // Sync state with lawyerSelectStore
   useEffect(() => {
     const updateFromStore = () => {
       setProfessionals(lawyerSelectStore.getProfessionals());
-      setCases(lawyerSelectStore.getMarketplaceCases());
+      setCases(lawyerSelectStore.getMarketplaceCases(activeLawyerId));
       const chats = lawyerSelectStore.getChatInteractions();
       setChatInteractions(chats);
       if (chats.length > 0 && !activeChatId) {
@@ -35,17 +56,61 @@ export default function App() {
     updateFromStore();
     const unsubscribe = lawyerSelectStore.subscribe(updateFromStore);
     return () => unsubscribe();
-  }, [activeChatId]);
+  }, [activeChatId, activeLawyerId]);
 
-  // Current active lawyer for the "Legal Pro" persona view
-  const currentLawyer = professionals.find((p) => p.id === 'lp_elena_vance') || professionals[0];
+  // Handle return from Stripe checkout payment with server session verification
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentSuccess = params.get('payment_success');
+    const caseIdParam = params.get('case_id');
+    const sessionIdParam = params.get('session_id');
+
+    if (paymentSuccess === 'true' && (caseIdParam || sessionIdParam)) {
+      const verifyAndUnlock = async () => {
+        let targetCaseId = caseIdParam;
+        let claimingLawyerId = activeLawyerId || currentLawyer?.id || 'lp_elena_vance';
+        let claimingLawyerName = currentLawyer?.fullName || currentUser?.displayName || 'Elena Vance SC';
+
+        if (sessionIdParam) {
+          try {
+            const res = await fetch(`/api/checkout/verify-session?sessionId=${sessionIdParam}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.verified) {
+                if (data.caseId) targetCaseId = data.caseId;
+                if (data.lawyerId) claimingLawyerId = data.lawyerId;
+                if (data.lawyerName) claimingLawyerName = data.lawyerName;
+              }
+            }
+          } catch (err) {
+            console.warn('Session verification fallback notice:', err);
+          }
+        }
+
+        if (targetCaseId) {
+          lawyerSelectStore.purchaseCaseLead(targetCaseId, claimingLawyerId, claimingLawyerName);
+          // Refresh cases immediately so the unlocked dossier is attached for this lawyer
+          setCases(lawyerSelectStore.getMarketplaceCases(claimingLawyerId));
+        }
+
+        setUserPersona('lawyer');
+        setActiveTab('caseboard');
+      };
+
+      verifyAndUnlock();
+    }
+  }, [currentLawyer, activeLawyerId]);
 
   // Handler: Select a lawyer from Matchmaker or Directory to open private chat
   const handleOpenChatWithLawyer = (lawyer: LegalProfessional, caseId?: string) => {
+    const clientId = currentUser ? currentUser.uid : 'client_guest_user';
+    const clientName = currentUser ? currentUser.displayName : 'Guest User';
+    const clientEmail = currentUser ? currentUser.email : 'guest@lawyerselect.com.au';
+
     const interaction = lawyerSelectStore.createOrGetChatInteraction(
-      'client_david_user',
-      'David K. (Corporate Client)',
-      'david.k@enterprise-nsw.com.au',
+      clientId,
+      clientName,
+      clientEmail,
       lawyer,
       caseId
     );
@@ -70,6 +135,8 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Authentication Modal */}
+      <AuthModal />
       
       {/* Navbar */}
       <Navbar
@@ -236,5 +303,13 @@ export default function App() {
       </footer>
 
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

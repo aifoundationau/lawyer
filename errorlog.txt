@@ -1,0 +1,111 @@
+LAWYER SELECT - ERROR LOG
+Checked 20 October 2026: read every source file, ran the TypeScript check and the production build (both pass), and drove every screen in a real browser at desktop and phone sizes, with the AI service both working and switched off. Live database writes were blocked during testing, so no real data was changed.
+One error per line, most serious first. "(tested)" means the error was reproduced in the browser or by running the code directly; the rest were found by reading the code.
+Total: 105 errors - 10 critical, 24 high, 47 medium, 24 low.
+Re-checked 20 October 2026 (evening) after the first round of fixes: items marked "(re-opened)" were removed from this log but are not actually fixed yet; items marked "(new)" were introduced by those changes.
+
+[CRITICAL] Payments: Opening the site with "?payment_success=true&case_id=..." in the address unlocks that lead for free - the return-from-Stripe code unlocks the case even when the payment check fails or no receipt is given. (re-opened)
+[CRITICAL] Payments: The payment-check route (verify-session) answers "verified" for any receipt number whenever the Stripe key isn't configured on the server. (new)
+[CRITICAL] Accounts: There is still no real login - "signing in" only saves a name in the browser, anyone can "join" as a lawyer with no password, the "Quick Demo" buttons sign you in as listed lawyers such as Elena Vance with no password, and a failed Google popup silently signs you in as a made-up "Google Verified Client". (re-opened)
+[CRITICAL] Privacy: The "locked" client details for the sample cases are still built into the public page files and every dossier is kept in the browser's own storage, so anyone can read them with developer tools - the lock only hides them on screen. (re-opened)
+[CRITICAL] Core function: A lawyer who pays on their own device never receives the client's details, because the confidential details only ever exist in the browser of the client who posted the case. (re-opened)
+[CRITICAL] Privacy: The app downloads entire database collections - every chat, purchase and profile, not just the visitor's own - into each browser, so if the database is open every visitor receives everyone's private conversations. (new)
+[CRITICAL] Chat: Messages still can't reliably reach the other person - the only real Firebase session is anonymous and its ID never matches the chat's client or lawyer, so the new rules would reject every chat save (and without the rules, every chat is public). (re-opened)
+[CRITICAL] Database security: The new rules let any signed-in user mark any lead as claimed by themselves, and create purchase records, without paying. (new)
+[CRITICAL] Database security: The new rules grant access by the email address in the login, which Firebase doesn't verify for email sign-ups, so someone who registers with a client's email could read that client's chats or change a lawyer's profile. (new)
+[CRITICAL] Firebase safety: firestore.rules replaces the rules for the whole database, so deploying it to the shared "ai-foundation-firebase" project would cut off every other app that uses that database. (new)
+[HIGH] Security: The Gemini key and Stripe secret key that used to be written in the code are still in the project's git history and must be replaced with new keys; the old Stripe key is also passed on the command line of the Stripe tool running in the background. (re-opened)
+[HIGH] Database security: The new rules let anyone create a lawyer profile under any ID and mark it "verified" themselves. (new)
+[HIGH] Payments: The Stripe payment-confirmation handler (webhook) only writes a log line - it never records the purchase or unlocks the lead.
+[HIGH] Payments: The payment-confirmation handler trusts any message that simply leaves out the Stripe signature (or arrives while the webhook secret isn't set), so anyone can fake a "payment completed" message; the webhook secret is also missing from the local settings file.
+[HIGH] Payments: A purchase record marked "completed", with a made-up Stripe receipt number, is saved even when no payment happened. (tested)
+[HIGH] Payments: Leads are sold as "exclusive", but nothing stops the same lead being sold to several lawyers - the checkout route doesn't check who is calling, whether the case exists or whether it is still open, and there is no single-buyer lock.
+[HIGH] Configuration: The settings are named NEXT_PUBLIC_... (a Next.js convention), but this is a Vite app that only reads settings starting with VITE_, so changing the Firebase, Stripe or Gemini settings has no effect and the values hard-coded in the code are always used. (tested in the built files)
+[HIGH] Post a Legal Matter: If the AI service is unavailable, posting a case fails with the technical message "Invalid regular expression: /+61 412 990 123/gi: Nothing to repeat" whenever the phone number starts with "+" - and the pre-filled number does. (tested)
+[HIGH] Privacy: When the AI is unavailable, the backup redaction leaves other people's names, street addresses, and phone numbers written with spaces or brackets in the public case summary (in testing a neighbour's name, a street address and "0412 345 678" were all left in). (tested)
+[HIGH] Privacy: If the AI's reply leaves out the anonymous summary, the client's original unredacted story is published on the public Case Feed.
+[HIGH] Stability: If the browser blocks website storage (some privacy settings and embedded views do), the whole site is a blank white page. (tested)
+[HIGH] Stability: If saved browser data is damaged, or the saved lawyer list is empty, the site crashes to a blank white page, and there is no error screen or recovery anywhere in the app. (tested)
+[HIGH] Mobile: On phones the chat conversation, message box and Send button sit off the right edge of the screen and can't be scrolled to, so chat can't be used on mobile. (tested at 360px wide)
+[HIGH] Lawyer profiles: Every new profile is published instantly as "verified" and active, with no check of the practising certificate or registration number.
+[HIGH] Directory: The green "Verified" badge is shown on every profile, whether or not it is actually verified. (tested)
+[HIGH] AI onboarding: The AI is told to "generate a realistic registration code" when none is given, so profiles show made-up registration numbers (testing produced "NTSP-2026-1482" for a bio with no number). (tested)
+[HIGH] AI onboarding: The AI invents an hourly rate when the practitioner gives none (the same bio produced $250/hr and $280/hr on two runs), and it is published as fact. (tested)
+[HIGH] Lawyer onboarding: When the AI is unavailable, the backup reader publishes placeholder details instead of the real ones - name "Legal Practitioner", firm "Apex Legal Practice", a fake email and phone, 12 years, $450/hr, a random "REG-" number and Sydney postcode 2000 for a Melbourne mediator. (tested)
+[HIGH] AI matching: When the AI is unavailable, the backup matcher gives nonsense results - an unfair-dismissal enquiry from Hobart returned a mediator and a notary public as 88% matches, because it matches word fragments such as "wa" in "warning" and "sa" in "sacked". (tested)
+[HIGH] Legal compliance: The site has no Privacy Policy, Terms of Use or "this is not legal advice" notice, even though it collects people's personal legal details and sends them to Google's AI.
+[HIGH] Misleading claim: The "APP 11 Privacy Certified" badge is false - no such certification exists, and the site doesn't meet the privacy principle it names.
+[HIGH] Misleading content: The sample lawyers are made-up people presented as real, verified practitioners.
+[HIGH] Misleading content: One fictional barrister is placed at the real Wentworth Chambers in Sydney and given an email address on its real web domain (wentworthchambers.com.au).
+[HIGH] Sample data: Sample "client" email addresses use real email services (gmail.com, outlook.com) and may belong to real people, who would be contacted by any lawyer who "buys" those sample leads.
+[MEDIUM] Chat: The system message "Connected with ..." is shown as if the client wrote it (right-hand side, in the client's colour). (tested)
+[MEDIUM] Chat: The "Sending message as" label always says David K. or Elena Vance SC, but messages are posted under whoever is in that conversation - in testing a reply labelled "Elena Vance SC" was posted as "Marcus Sterling". (tested)
+[MEDIUM] Chat: Anyone can flip the role switch to read every conversation, including other lawyers' chats, and post messages pretending to be the other person. (tested)
+[MEDIUM] Chat: The message list doesn't scroll to new messages, so after a few messages the newest ones are hidden and you have to scroll down by hand. (tested)
+[MEDIUM] Chat: New conversations started from AI Match or the Directory are never saved to the online database, because the code includes an empty "case" field that Firebase refuses - and the failure is hidden. (tested)
+[MEDIUM] Database: Every failed database save is silently ignored (only a hidden console note), so data can be lost without anyone knowing.
+[MEDIUM] Stability: If the browser's storage is full, saving a case, profile or message throws an error and the action quietly fails.
+[MEDIUM] Post a Legal Matter: After submitting, the client is sent straight to the lawyers' Case Feed, so the "Case Successfully Placed" confirmation screen is never seen. (tested)
+[MEDIUM] Post a Legal Matter: The form arrives pre-filled with someone else's name, email and phone (David K., david.k@enterprise-nsw.com.au, +61 412 990 123), so a hurried client could submit a case under the wrong contact details. (tested)
+[MEDIUM] Privacy: The backup redaction mangles ordinary words that contain part of the client's name - for a client called "Ann Lee", "annual" became "[Client]ual" and "fleet" became "f[Client]t". (tested)
+[MEDIUM] Lawyer onboarding: After publishing, the page jumps to the Directory, so the "Profile Successfully Published!" message is never seen. (tested)
+[MEDIUM] Lawyer onboarding: Years of experience can't be set to 0 - typing 0 or clearing the box snaps back to 10, and 10 is what gets saved. (tested)
+[MEDIUM] Lawyer onboarding: The hourly-rate box shows $400 when cleared or set to 0, but $450 is what actually gets saved. (tested)
+[MEDIUM] Lawyer onboarding: The fee dropdown has no "Conditional" or "Free Consultation" option, so when the AI picks one the screen shows "Hourly Rate" while "Conditional" is what gets published. (tested)
+[MEDIUM] Lawyer onboarding: Practice areas and states can't be edited before publishing, so wrong ones go live (testing added "Defamation & Media" and "SA" to a Melbourne family mediator). (tested)
+[MEDIUM] Lawyer onboarding: The email address and phone number aren't shown or editable before publishing, so wrong or placeholder contact details are published unseen. (tested)
+[MEDIUM] AI: The AI's answers are used without checking their shape, so an unexpected reply (for example a list of states sent back as plain text) can crash the page to a blank screen.
+[MEDIUM] AI: The AI's reply is copied straight into the new profile, so a carefully worded bio could make it set its own ID and overwrite another lawyer's profile (a test attempt was refused by the AI, but nothing in the code prevents it).
+[MEDIUM] AI: The AI server route needs no sign-in and has no usage limit, so anyone on the internet can use it to run up your Gemini bill or use up the quota, after which every visitor gets the weaker backup logic.
+[MEDIUM] AI: AI requests have no time limit, so if the AI service hangs the button keeps "analysing" forever with no way to cancel.
+[MEDIUM] AI matching: Match scores are forced to at least 75% (AI) or 78% (backup), so unsuitable lawyers look like strong matches - testing showed a criminal defence solicitor as a 76% match for a commercial lease lockout. (tested)
+[MEDIUM] Case Feed: The practice-area filter is missing six areas (Wills & Estates, Intellectual Property, Personal Injury, Tax Law, Building & Construction, Administrative Law), so those cases can't be filtered - a new "Building & Construction" case in testing couldn't be found by filter. (tested)
+[MEDIUM] Case Feed: The state filter has no TAS, ACT or NT option, so cases from those places can't be filtered.
+[MEDIUM] Directory: The discipline filter has no Arbitrator, Paralegal or Legal Consultant option, so those practitioners can't be filtered.
+[MEDIUM] Directory: The state filter has no TAS, ACT or NT option, so practitioners there can't be filtered.
+[MEDIUM] Legal Library: "Find Specialist in this Law" opens AI Match with an empty form - the chosen law is thrown away. (tested)
+[MEDIUM] Navigation: The web address never changes, so refreshing returns to the home screen, the Back button leaves the site, and no page can be bookmarked or shared. (tested)
+[MEDIUM] Navigation: Switching tabs wipes anything typed and any AI match results.
+[MEDIUM] Mobile: The Directory and Legal Library pages are wider than a small phone screen, so they scroll sideways. (tested at 360px wide)
+[MEDIUM] Mobile: The sticky header takes up about 40% of a phone screen (about 300px) and stays pinned while scrolling. (tested)
+[MEDIUM] Accessibility: The logo and the chat conversation list can't be used with a keyboard. (tested)
+[MEDIUM] Accessibility: Form labels aren't linked to their fields, so screen readers don't announce what each box is for.
+[MEDIUM] Accessibility: The checkout pop-up isn't marked as a dialog, doesn't hold keyboard focus and can't be closed with the Escape key.
+[MEDIUM] Misleading claim: The chat is labelled "LPP Privileged Channel" and "Protected under Legal Professional Privilege", which a platform can't promise - and the messages are stored unencrypted.
+[MEDIUM] Misleading claim: The checkout window says "Secured via Stripe (PCI DSS Level 1)" although no Stripe payment ever takes place.
+[MEDIUM] Misleading claim: The Legal Library is advertised as a "comprehensive database" and the "Australian National Legal Library" but holds only 16 hand-written summaries.
+[MEDIUM] Privacy: Confidential case details and chats are kept unencrypted in the browser with no expiry, so the next person on a shared or public computer can read them.
+[MEDIUM] Payments: If the site address setting isn't set on the server, Stripe would send paying customers back to "localhost" (the developer's own computer) after paying.
+[MEDIUM] Payments: If the Stripe keys aren't set on the server, the code silently falls back to a test-mode key, so no real payments would ever be collected.
+[MEDIUM] Payments: The return-from-Stripe code re-runs whenever the signed-in lawyer changes and never clears the address bar, so the same purchase can be recorded several times. (new)
+[MEDIUM] Misleading claim: The AI now runs on Gemini 2.5 Flash, but the home page and footer still say "Gemini 3.8 Flash". (new)
+[MEDIUM] Project rules: The safetyprotocols document lists protections as in place that don't exist in the code - database security rules, Stripe-hosted checkout, webhook-verified unlocks, a single-buyer purchase lock, rate limiting, practitioner verification, prompt-injection and hallucination guards, and introduction emails.
+[MEDIUM] Project rules: Saved records are missing the "source: lawyerselect" field and the "updatedAt" timestamp that data-contracts.md says every record must have.
+[MEDIUM] Project rules: Chat messages are stored inside the chat record instead of the separate messages collection required by data-contracts.md.
+[MEDIUM] Project rules: Purchases and AI match requests are never saved to the database ("case_purchases" and "client_matches"), although data-contracts.md requires both.
+[MEDIUM] Project rules: None of the input rules in data-contracts.md are enforced (length limits, email and phone formats, 4-digit postcode, 0-70 years, $0-5,000 hourly rate).
+[MEDIUM] Project rules: The server addresses listed in data-contracts.md (for example /api/ai/onboarding and /api/chat/send-message) don't exist; the only ones are /api/checkout/purchase-lead and /api/webhooks/stripe.
+[LOW] Chat: The red number on the Chat tab counts conversations, not unread messages, so it shows "1" even when everything has been read. (tested)
+[LOW] Chat: Message times show only the hour and minute, never the date, so old messages look like they were sent today.
+[LOW] Chat: Every new visitor sees a ready-made sample conversation between "David K." and "Elena Vance SC" as if it were their own.
+[LOW] Sample data: Sample cases and the demo chat have fixed dates and deadlines (some are timestamped later today, so they appear to come from the future, and "expires in 6 days" never changes), which will look stale or wrong as time passes. (tested)
+[LOW] Sample data: Sample lawyers and cases are copied into each visitor's browser on the first visit and never refreshed, so later corrections never reach returning visitors.
+[LOW] AI Match: The results always say "3 Optimal Matches Found", even when fewer are shown.
+[LOW] AI Match: If the AI lists the same lawyer twice, that lawyer appears twice in the "top 3".
+[LOW] AI Match and onboarding: The quick-example buttons stay clickable while the AI is working, so clicking another one can show results for the wrong example.
+[LOW] AI Match: Every match request sends the whole lawyer list (with bios) to the AI, which will get slower, dearer and eventually fail as the directory grows.
+[LOW] Directory and AI Match: A practitioner's status is never checked, so suspended or pending profiles would still be listed and matched.
+[LOW] Directory: When a search finds nothing, the page shows empty space with no "no results" message.
+[LOW] Lawyer onboarding: Publishing the same profile twice creates duplicate listings - there is no duplicate check.
+[LOW] Case Feed: After buying a lead, the success message shows a meaningless cut-off case number such as "Case #case_lea". (tested)
+[LOW] Legal Library: "Copy Citation" shows "Citation Copied" even when copying fails (for example when the browser blocks the clipboard).
+[LOW] Legal Library: Its practice-area names don't match the rest of the site (e.g. "Criminal & Traffic" vs "Criminal Law", "IP & Patent Law" vs "Intellectual Property"), so library topics can't be linked to matching lawyers.
+[LOW] Legal Library: The "Commonwealth" and "Federal" filter buttons give identical results.
+[LOW] Footer: It promises "Retention: 7 Years Statutory" and shows internal jargon ("Data Contracts Version 1.0.0-IMMUTABLE"), but records only live in visitors' browsers and can be wiped at any time.
+[LOW] Project rules: The urgency values saved on cases ("Standard (1-2 Weeks)", "Exploratory / Planning") don't match the values data-contracts.md allows ("Standard", "Exploratory").
+[LOW] Design: The loading icons on the AI buttons are meant to spin but don't, because the "animate-spin" style doesn't exist. (tested)
+[LOW] Design: The Legal Library uses a colour setting ("--text-light") that doesn't exist, so that text falls back to the default colour. (tested)
+[LOW] Design: The "AI Professional Onboarding" badge uses a style ("badge-purple") that doesn't exist, so its icon and text sit unevenly.
+[LOW] Site icon: The browser-tab icon (/favicon.svg) doesn't exist - the server returns the home page instead - so no icon shows. (tested)
+[LOW] Performance: All the code ships as one 1.3 MB file (312 KB compressed), which the build tool warns about, so first visits are slow on mobile connections. (tested)
+[LOW] Code safety: Strict type checking is turned off, and Firebase and the icon library are declared as "anything", so many coding mistakes aren't caught when the site is built.

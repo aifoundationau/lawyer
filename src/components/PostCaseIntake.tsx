@@ -1,21 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, Sparkles, ShieldCheck, CheckCircle2, AlertCircle, ArrowRight } from './icons';
 import { UrgencyLevel, MarketplaceCase } from '../types';
 import { sanitizeAndPlaceCaseWithAI } from '../services/geminiService';
 import { lawyerSelectStore } from '../services/lawyerSelectStore';
+import { useAuth } from '../context/AuthContext';
 
 interface PostCaseIntakeProps {
   onCasePosted: (newCase: MarketplaceCase) => void;
 }
 
 export const PostCaseIntake: React.FC<PostCaseIntakeProps> = ({ onCasePosted }) => {
+  const { currentUser } = useAuth();
   const [issueText, setIssueText] = useState('');
-  const [clientName, setClientName] = useState('David K.');
-  const [clientEmail, setClientEmail] = useState('david.k@enterprise-nsw.com.au');
-  const [clientPhone, setClientPhone] = useState('+61 412 990 123');
+  const [clientName, setClientName] = useState(currentUser?.displayName || '');
+  const [clientEmail, setClientEmail] = useState(currentUser?.email || '');
+  const [clientPhone, setClientPhone] = useState(currentUser?.phone || '');
   const [location, setLocation] = useState('Sydney, NSW');
   const [urgency, setUrgency] = useState<UrgencyLevel>('Urgent (2-3 Days)');
   const [budget, setBudget] = useState('$2,000 - $5,000 AUD');
+
+  useEffect(() => {
+    if (currentUser) {
+      if (!clientName) setClientName(currentUser.displayName || '');
+      if (!clientEmail) setClientEmail(currentUser.email || '');
+      if (!clientPhone && currentUser.phone) setClientPhone(currentUser.phone);
+    }
+  }, [currentUser]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [postedCase, setPostedCase] = useState<MarketplaceCase | null>(null);

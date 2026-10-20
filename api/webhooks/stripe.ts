@@ -1,9 +1,6 @@
 import Stripe from 'stripe';
 
-const stripeSecret = process.env.STRIPE_SECRET_KEY || "sk_test_51UKnKUI8bClhBF4PaZh92nVzBDUZLhvrD3Po8YzvEuYDsApZuGHCTTcPPDTlY2UBrmLcMBJjoMGP8Dmx10c9GBPj00F4dYp8ZZ";
-const stripe = new Stripe(stripeSecret, {
-  apiVersion: '2024-12-18.acacia' as any,
-});
+const stripeSecret = process.env.STRIPE_SECRET_KEY;
 
 export const config = {
   api: {
@@ -15,6 +12,14 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  if (!stripeSecret) {
+    return res.status(500).json({ error: 'STRIPE_SECRET_KEY is not configured in server environment' });
+  }
+
+  const stripe = new Stripe(stripeSecret, {
+    apiVersion: '2024-12-18.acacia' as any,
+  });
 
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;

@@ -1,4 +1,5 @@
-import { Scale, Briefcase, FileText, Sparkles, MessageSquare, Users, Shield, UserCheck, ArrowRightLeft, BookOpen } from './icons';
+import { Scale, Briefcase, FileText, Sparkles, MessageSquare, Users, Shield, UserCheck, ArrowRightLeft, BookOpen, User, LogOut } from './icons';
+import { useAuth } from '../context/AuthContext';
 
 export type ActiveTab = 'matchmaker' | 'caseboard' | 'postcase' | 'onboarding' | 'chat' | 'directory' | 'corpus';
 export type UserPersona = 'client' | 'lawyer';
@@ -18,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setUserPersona,
   unreadChatCount,
 }) => {
+  const { currentUser, role, isAuthenticated, signOut, setShowAuthModal } = useAuth();
   return (
     <header style={{
       position: 'sticky',
@@ -256,40 +258,78 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </nav>
 
-        {/* Perspective Switcher */}
+        {/* User Account & Role Widget */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            background: 'rgba(10, 14, 23, 0.9)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-md)',
-            padding: '0.35rem 0.75rem',
-          }}>
-            <ArrowRightLeft size={14} style={{ color: 'var(--gold-primary)' }} />
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
-                Active Persona
-              </span>
-              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: userPersona === 'client' ? '#60a5fa' : 'var(--gold-light)' }}>
-                {userPersona === 'client' ? 'Client: David K.' : 'Legal Pro: Elena Vance SC'}
-              </span>
+          {isAuthenticated && currentUser ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+              background: 'rgba(10, 14, 23, 0.9)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.35rem 0.75rem',
+            }}>
+              <div style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                background: currentUser.role === 'lawyer' ? 'rgba(229, 169, 60, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                border: currentUser.role === 'lawyer' ? '1px solid var(--border-gold)' : '1px solid var(--accent-blue)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: currentUser.role === 'lawyer' ? 'var(--gold-light)' : '#93c5fd',
+              }}>
+                <User size={15} />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
+                  {currentUser.displayName}
+                </span>
+                <span style={{
+                  fontSize: '0.65rem',
+                  textTransform: 'uppercase',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  color: currentUser.role === 'lawyer' ? 'var(--gold-light)' : '#93c5fd',
+                }}>
+                  {currentUser.role === 'lawyer' ? 'Verified Practitioner' : 'Consumer Client'}
+                </span>
+              </div>
+
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="btn-ghost"
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                title="Switch account persona"
+              >
+                <ArrowRightLeft size={11} />
+                <span>Switch</span>
+              </button>
+
+              <button
+                onClick={signOut}
+                className="btn-ghost"
+                style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', color: '#f87171' }}
+                title="Sign Out"
+              >
+                <LogOut size={12} />
+              </button>
             </div>
-            <button
-              onClick={() => setUserPersona(userPersona === 'client' ? 'lawyer' : 'client')}
-              className="btn-ghost"
-              style={{
-                padding: '0.25rem 0.55rem',
-                fontSize: '0.72rem',
-                borderRadius: 'var(--radius-sm)',
-                marginLeft: '0.25rem',
-              }}
-              title="Switch persona to test both client search & lawyer lead unlock"
-            >
-              Switch to {userPersona === 'client' ? 'Lawyer' : 'Client'}
-            </button>
-          </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="btn-gold"
+                style={{ padding: '0.45rem 1rem', fontSize: '0.82rem' }}
+              >
+                <User size={14} />
+                <span>Sign In / Join</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

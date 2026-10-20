@@ -45,14 +45,13 @@ export async function initiateLeadPurchaseCheckout(
       const errData = await response.json().catch(() => ({}));
       return {
         success: false,
-        error: errData.error || 'Checkout API returned an error',
+        error: errData.error || `Checkout API returned status ${response.status}`,
       };
     }
   } catch (err: any) {
-    // If backend API is offline in local dev mode, return mock success option so developer/user can test
     return {
-      success: true,
-      sessionId: 'cs_test_mock_' + Math.random().toString(36).substring(2, 10),
+      success: false,
+      error: err.message || 'Unable to connect to payment server',
     };
   }
 }

@@ -1,71 +1,26 @@
-import { GoogleGenAI } from '@google/genai';
 import { LegalProfessional, MatchedProfessionalResult, MarketplaceCase, PracticeArea, Jurisdiction, LegalTitle, UrgencyLevel, FeeStructure } from '../types';
-
-// Read API key from Vite or Next.js public env
-const GEMINI_API_KEY =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
-  (typeof import.meta !== 'undefined' && import.meta.env?.GEMINI_API_KEY) ||
-  "AIzaSyBhmAD9sNd3x4JW8fv8JvV_36TCcSttgkM";
-
-let aiClient: GoogleGenAI | null = null;
-try {
-  if (GEMINI_API_KEY) {
-    aiClient = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-  }
-} catch (err) {
-  console.warn('Google GenAI initialization warning:', err);
-}
 
 /**
  * 1. AI LEGAL PROFESSIONAL ONBOARDING
- * Converts free-text bio, resume, or conversational pitch into a structured LegalProfessional profile.
+ * Converts free-text bio, resume, or conversational pitch into a structured LegalProfessional profile via server-side AI proxy.
  */
 export async function onboardLegalProfessionalWithAI(freeTextInput: string): Promise<Partial<LegalProfessional>> {
   if (!freeTextInput.trim()) {
     throw new Error('Please provide details about your legal practice.');
   }
 
-  const prompt = `You are the Lawyer Select (#lawyerselect) Onboarding AI Engine.
-Analyze the following unstructured description or bio provided by a legal professional.
-Extract and structure their profile into valid JSON with this exact schema:
-{
-  "fullName": "Full legal name with any postnominals (e.g., Sarah Jenkins SC)",
-  "title": "One of: Solicitor, Barrister, Conveyancer, Paralegal, Mediator, Patent Attorney, Notary Public, Migration Agent, Arbitrator, Legal Consultant",
-  "firmName": "Law firm, chambers, or practice name",
-  "email": "Contact email address",
-  "phone": "Phone number formatted",
-  "jurisdictions": ["Array of: NSW, VIC, QLD, WA, SA, TAS, ACT, NT, Federal"],
-  "practiceAreas": ["Array of: Family Law, Criminal Law, Commercial & Corporate, Property & Conveyancing, Immigration Law, Employment & Workplace, Wills & Estates, Intellectual Property, Personal Injury, Civil Litigation, Tax Law, Defamation & Media, Building & Construction, Administrative Law"],
-  "yearsOfExperience": number of years as an integer,
-  "barOrRegistrationNumber": "Practicing certificate number, Bar number, MARA number, or NMAS mediator ID if mentioned, or generate a realistic registration code",
-  "bio": "Refined executive professional summary of their experience and core focus (2-4 paragraphs)",
-  "feeStructure": "One of: Fixed Fee, Hourly Rate, No Win No Fee, Retainer, Conditional, Free Consultation",
-  "hourlyRateAud": estimated or specified hourly rate in AUD as a number,
-  "locationCity": "City name (e.g., Sydney, Melbourne, Brisbane, Perth)",
-  "locationPostcode": "4-digit Australian postcode"
-}
-
-Ensure strictly valid JSON output only without markdown code blocks.
-
-Legal Professional Input:
-"""
-${freeTextInput}
-"""`;
-
   try {
-    if (aiClient) {
-      const response = await aiClient.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
-        },
-      });
+    const res = await fetch('/api/ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'onboard',
+        payload: { freeTextInput },
+      }),
+    });
 
-      const responseText = response.text?.trim() || '{}';
-      const cleanJson = responseText.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-      const parsed = JSON.parse(cleanJson);
+    if (res.ok) {
+      const parsed = await res.json();
       return {
         ...parsed,
         tag: 'lawyerselect',
@@ -75,7 +30,7 @@ ${freeTextInput}
       };
     }
   } catch (err) {
-    console.warn('Gemini API call failed, using intelligent legal parser fallback:', err);
+    console.warn('AI Onboarding endpoint failed, using intelligent legal parser fallback:', err);
   }
 
   // Robust Heuristic Fallback
@@ -84,7 +39,7 @@ ${freeTextInput}
 
 /**
  * 2. CLIENT AI MATCHMAKER
- * Evaluates client's enquiry against all legal professionals in database and returns the TOP 3 MATCHES.
+ * Evaluates client's enquiry against all legal professionals in database and returns the TOP 3 MATCHES via server-side AI proxy.
  */
 export async function matchClientEnquiryWithAI(
   enquiryText: string,
@@ -96,61 +51,23 @@ export async function matchClientEnquiryWithAI(
     throw new Error('Please describe your legal issue.');
   }
 
-  const prompt = `You are Lawyer Select (#lawyerselect) Senior Legal Matching AI.
-A client needs legal assistance. You must evaluate the client's inquiry and score the legal professionals in our database to return the TOP 3 BEST MATCHED legal professionals.
-
-Client Enquiry:
-"""
-${enquiryText}
-Location: ${userLocation}
-Urgency: ${urgency}
-"""
-
-Available Legal Professionals:
-${JSON.stringify(
-  professionals.map((p) => ({
-    id: p.id,
-    fullName: p.fullName,
-    title: p.title,
-    firmName: p.firmName,
-    jurisdictions: p.jurisdictions,
-    practiceAreas: p.practiceAreas,
-    yearsOfExperience: p.yearsOfExperience,
-    feeStructure: p.feeStructure,
-    hourlyRateAud: p.hourlyRateAud,
-    locationCity: p.locationCity,
-    bio: p.bio,
-  })),
-  null,
-  2
-)}
-
-Task:
-Return a JSON array of EXACTLY 3 objects for the top 3 best matching professionals, sorted by highest matchScore first:
-[
-  {
-    "professionalId": "id matching the professional",
-    "matchScore": number between 75 and 99,
-    "matchRationale": "2-3 sentences explaining precisely why this professional is ideal for this client's specific dispute, urgency, jurisdiction, and legal area."
-  }
-]
-`;
-
   try {
-    if (aiClient) {
-      const response = await aiClient.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
+    const res = await fetch('/api/ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'matchmaker',
+        payload: {
+          enquiryText,
+          userLocation,
+          urgency,
+          professionals,
         },
-      });
+      }),
+    });
 
-      const responseText = response.text?.trim() || '[]';
-      const cleanJson = responseText.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-      const parsedArray: Array<{ professionalId: string; matchScore: number; matchRationale: string }> = JSON.parse(cleanJson);
-
+    if (res.ok) {
+      const parsedArray: Array<{ professionalId: string; matchScore: number; matchRationale: string }> = await res.json();
       const matchedResults: MatchedProfessionalResult[] = [];
       for (const item of parsedArray) {
         const pro = professionals.find((p) => p.id === item.professionalId);
@@ -168,7 +85,7 @@ Return a JSON array of EXACTLY 3 objects for the top 3 best matching professiona
       }
     }
   } catch (err) {
-    console.warn('Gemini Matchmaker failed, executing algorithmic legal matching engine:', err);
+    console.warn('AI Matchmaker endpoint failed, executing algorithmic legal matching engine:', err);
   }
 
   return fallbackMatchLawyers(enquiryText, userLocation, urgency, professionals);
@@ -176,7 +93,7 @@ Return a JSON array of EXACTLY 3 objects for the top 3 best matching professiona
 
 /**
  * 3. CLIENT CASE INTAKE & PII REDACTION (MARKETPLACE CASE BOARD)
- * Takes a raw legal issue and prepares an APP 11 compliant anonymous summary.
+ * Takes a raw legal issue and prepares an APP 11 compliant anonymous summary via server-side AI proxy.
  */
 export async function sanitizeAndPlaceCaseWithAI(
   rawIssue: string,
@@ -187,35 +104,6 @@ export async function sanitizeAndPlaceCaseWithAI(
   urgency: UrgencyLevel,
   budget: string
 ): Promise<MarketplaceCase> {
-  const prompt = `You are Lawyer Select (#lawyerselect) Privacy & Case Extraction AI.
-In compliance with Australian Privacy Principle APP 11 and Legal Professional Privilege:
-Sanitize and redact the following consumer legal submission for our anonymous legal marketplace case board.
-
-Rules:
-1. The anonymousSummary MUST STRIP ALL personal identifiers: client full name, opposing party personal names, direct phone numbers, personal emails, and specific street addresses.
-2. Keep the factual legal conflict intact (e.g. "Commercial lease lockout in Parramatta", "Unfair dismissal from finance role", "Property settlement contract dispute").
-3. Create a concise, professional legal title.
-4. Identify the primary Australian Practice Area and State/Federal Jurisdiction.
-5. Provide a 1-sentence description of key legal assistance required.
-
-Client Submission:
-"""
-Issue: ${rawIssue}
-Location: ${userLocation}
-Urgency: ${urgency}
-Budget: ${budget}
-"""
-
-Output JSON Schema:
-{
-  "title": "Concise professional title (max 12 words)",
-  "category": "One of: Family Law, Criminal Law, Commercial & Corporate, Property & Conveyancing, Immigration Law, Employment & Workplace, Wills & Estates, Intellectual Property, Personal Injury, Civil Litigation, Tax Law, Defamation & Media, Building & Construction, Administrative Law",
-  "jurisdiction": "One of: NSW, VIC, QLD, WA, SA, TAS, ACT, NT, Federal",
-  "anonymousSummary": "Professional sanitized summary with zero direct PII (2-3 paragraphs)",
-  "keyAssistanceRequired": "Specific legal tasks needed (e.g., Injunction drafting, Contract rescission, Fair Work representation)",
-  "estimatedBudget": "Formatted budget string (e.g. '$2,000 - $4,000 AUD')"
-}`;
-
   let extractedData = {
     title: 'Legal Matter Assistance Required',
     category: 'Civil Litigation' as PracticeArea,
@@ -226,23 +114,28 @@ Output JSON Schema:
   };
 
   try {
-    if (aiClient) {
-      const response = await aiClient.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
+    const res = await fetch('/api/ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'sanitizeCase',
+        payload: {
+          rawIssue,
+          userLocation,
+          urgency,
+          budget,
         },
-      });
+      }),
+    });
 
-      const responseText = response.text?.trim() || '{}';
-      const cleanJson = responseText.replace(/^```json\s*/, '').replace(/```$/, '').trim();
-      const parsed = JSON.parse(cleanJson);
+    if (res.ok) {
+      const parsed = await res.json();
       extractedData = { ...extractedData, ...parsed };
+    } else {
+      extractedData.anonymousSummary = sanitizePiiOffline(rawIssue, clientName, clientEmail, clientPhone);
     }
   } catch (err) {
-    console.warn('Gemini Case Sanitizer failed, applying local sanitizer:', err);
+    console.warn('AI Case Sanitizer endpoint failed, applying local sanitizer:', err);
     extractedData.anonymousSummary = sanitizePiiOffline(rawIssue, clientName, clientEmail, clientPhone);
   }
 

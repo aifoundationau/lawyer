@@ -1,0 +1,195 @@
+rules_version = '2';
+
+// =====================================================================================
+// Lawyer Select (#lawyerselect) - Firestore security rules
+//
+// DEPLOYMENT WARNING: a rules file replaces ALL rules of the database it is deployed to.
+// Deploy this file only to a database used by Lawyer Select alone - ideally a dedicated
+// Firebase project, or a named database such as "lawyerselect". Never deploy it to the
+// shared ai-foundation-firebase default database: it would cut off every other app.
+//
+// Principles
+//  - Deny by default: anything not allowed below is refused.
+//  - Money, practitioner verification and published case text are written only by the
+//    server (Admin SDK in /api), which is not subject to these rules.
+//  - Confidential client details live in a separate "private/dossier" document that only
+//    the client who posted the case and the one practitioner who paid for it can read.
+//  - Chat messages must come from the signed-in participant they claim to be from.
+//
+// Tested by tests/rules/firestore.rules.test.ts (npm run test:rules).
+// =====================================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    // Email/password accounts must confirm their email address; Google accounts already have.
+    function verifiedEmail() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function professionalPath(id) {
+      return /databases/$(database)/documents/legal_professionals/$(id);
+    }
+
+    function isActiveVerifiedProfessional(id) {
+      return exists(professionalPath(id))
+        && get(professionalPath(id)).data.status == 'active'
+        && get(professionalPath(id)).data.isVerified == true;
+    }
+
+    function isVerifiedLawyer() {
+      return verifiedEmail() && isActiveVerifiedProfessional(uid());
+    }
+
+    // ---------------------------------------------------------------- Directory
+    match /legal_professionals/{proId} {
+      // Listed (active and verified) practitioners are public; owners can always read their own.
+      allow read: if (resource.data.status == 'active' && resource.data.isVerified == true)
+                  || (signedIn() && uid() == proId);
+      // Profiles are written by /api/legal-professionals/profile, which validates them and
+      // never lets a practitioner verify themselves.
+      allow write: if false;
+
+      // Practitioner email and phone are private: clients make first contact through chat.
+      match /private/{docId} {
+        allow read: if signedIn() && uid() == proId;
+        allow write: if false;
+      }
+    }
+
+    // ---------------------------------------------------------------- Case exchange
+    match /marketplace_cases/{caseId} {
+      // Redacted summaries: verified, active practitioners only.
+      allow read: if isVerifiedLawyer();
+      // Written by /api/ai/submit-case (redaction) and the Stripe webhook (claims).
+      allow write: if false;
+
+      match /private/dossier {
+        allow read: if signedIn()
+          && (resource.data.clientUid == uid() || resource.data.purchaserUid == uid());
+        allow write: if false;
+      }
+    }
+
+    match /case_purchases/{purchaseId} {
+      allow read: if signedIn() && resource.data.legalProfessionalId == uid();
+      allow write: if false; // Stripe checkout route and webhook only
+    }
+
+    match /client_matches/{matchId} {
+      allow read: if signedIn() && resource.data.clientUid == uid();
+      allow write: if false; // written by /api/ai/match-inquiry
+    }
+
+    // ---------------------------------------------------------------- Chat
+    function chatFields() {
+      return ['id', 'tag', 'source', 'clientId', 'lawyerId', 'participants', 'clientName',
+              'lawyerName', 'lawyerTitle', 'lawyerFirm', 'caseId', 'status',
+              'lastMessageSnippet', 'lastMessageAt', 'lastMessageSenderId', 'lastReadAt',
+              'createdAt', 'updatedAt'];
+    }
+
+    function validNewChat(chatId, d) {
+      let pro = get(professionalPath(d.lawyerId)).data;
+      return d.keys().hasAll(chatFields()) && d.keys().hasOnly(chatFields())
+        && d.id == chatId
+        && chatId == 'chat_' + d.clientId + d.lawyerId
+        && d.tag == 'lawyerselect' && d.source == 'lawyerselect'
+        && d.clientId != d.lawyerId
+        && d.participants == [d.clientId, d.lawyerId]
+        && d.clientName is string && d.clientName.size() > 0 && d.clientName.size() <= 100
+        && d.status == 'active'
+        && d.lastMessageSnippet == '' && d.lastMessageSenderId == null
+        && d.lastReadAt == {}
+        && d.createdAt == request.time && d.updatedAt == request.time && d.lastMessageAt == request.time
+        && isActiveVerifiedProfessional(d.lawyerId)
+        && d.lawyerName == pro.fullName && d.lawyerTitle == pro.title && d.lawyerFirm == pro.firmName;
+    }
+
+    // A client starts a conversation with a listed practitioner they chose.
+    function clientStartsChat(d) {
+      return d.clientId == uid() && d.caseId == null;
+    }
+
+    // A practitioner contacts the client of a case they have paid for.
+    function purchaserStartsChat(d) {
+      let dossierPath = /databases/$(database)/documents/marketplace_cases/$(d.caseId)/private/dossier;
+      return d.lawyerId == uid() && d.caseId is string
+        && exists(dossierPath)
+        && get(dossierPath).data.purchaserUid == uid()
+        && get(dossierPath).data.clientUid == d.clientId
+        && get(dossierPath).data.clientFullName == d.clientName;
+    }
+
+    // Participants may only change the "last message" summary and their own read marker.
+    function validChatUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let sendsMessage = changed.hasAny(['lastMessageSnippet', 'lastMessageAt', 'lastMessageSenderId']);
+      let readsChat = changed.hasAny(['lastReadAt']);
+      return changed.hasOnly(['lastMessageSnippet', 'lastMessageAt', 'lastMessageSenderId', 'lastReadAt', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && (!sendsMessage || (
+              request.resource.data.lastMessageSenderId == uid()
+              && request.resource.data.lastMessageAt == request.time
+              // At most one message per second in each conversation.
+              && request.time > resource.data.lastMessageAt + duration.value(1, 's')
+              && request.resource.data.lastMessageSnippet is string
+              && request.resource.data.lastMessageSnippet.size() <= 150))
+        && (!readsChat || (
+              request.resource.data.lastReadAt.diff(resource.data.lastReadAt).affectedKeys().hasOnly([uid()])
+              && request.resource.data.lastReadAt[uid()] == request.time));
+    }
+
+    function validNewMessage(chatId, messageId, chat) {
+      let d = request.resource.data;
+      let fields = ['id', 'senderId', 'senderRole', 'senderName', 'content', 'sentAt', 'read'];
+      let chatAfter = getAfter(/databases/$(database)/documents/chat_interactions/$(chatId)).data;
+      return chat.status == 'active'
+        && d.keys().hasAll(fields) && d.keys().hasOnly(fields)
+        && d.id == messageId
+        && d.senderId == uid()
+        && ((uid() == chat.clientId && d.senderRole == 'client' && d.senderName == chat.clientName)
+            || (uid() == chat.lawyerId && d.senderRole == 'legal_professional' && d.senderName == chat.lawyerName))
+        && d.content is string && d.content.size() >= 1 && d.content.size() <= 4000
+        && d.sentAt == request.time
+        && d.read == false
+        // The conversation summary must be updated in the same write (this applies the rate limit).
+        && chatAfter.lastMessageAt == request.time
+        && chatAfter.lastMessageSenderId == uid();
+    }
+
+    match /chat_interactions/{chatId} {
+      allow read: if signedIn() && uid() in resource.data.participants;
+      allow create: if verifiedEmail()
+        && validNewChat(chatId, request.resource.data)
+        && (clientStartsChat(request.resource.data) || purchaserStartsChat(request.resource.data));
+      allow update: if signedIn() && uid() in resource.data.participants && validChatUpdate();
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function parentChat() {
+          return get(/databases/$(database)/documents/chat_interactions/$(chatId)).data;
+        }
+
+        allow read: if signedIn() && uid() in parentChat().participants;
+        allow create: if verifiedEmail()
+          && uid() in parentChat().participants
+          && validNewMessage(chatId, messageId, parentChat());
+        // The recipient may mark a message as read; nothing else about a message can change.
+        allow update: if signedIn() && uid() in parentChat().participants
+          && resource.data.senderId != uid()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read == true;
+        allow delete: if false;
+      }
+    }
+  }
+}

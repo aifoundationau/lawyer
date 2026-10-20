@@ -271,3 +271,19 @@ h1, h2, h3, .heading-serif {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(229, 169, 60, 0.4);
 }
+
+/* Responsive Chat Messenger */
+.chat-messenger-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) 1fr;
+  gap: 1.25rem;
+  min-height: 620px;
+}
+
+@media (max-width: 768px) {
+  .chat-messenger-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+}
+

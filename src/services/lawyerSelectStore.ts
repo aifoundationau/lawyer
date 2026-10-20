@@ -1,23 +1,26 @@
-import { LegalProfessional, MarketplaceCase, ChatInteraction, ChatMessage, CasePurchase } from '../types';
+import { LegalProfessional, MarketplaceCase, ChatInteraction, ChatMessage, CasePurchase, CaseConfidentialDossier } from '../types';
 import { SEED_LEGAL_PROFESSIONALS } from '../data/seedLawyers';
-import { SEED_MARKETPLACE_CASES } from '../data/seedCases';
+import { SEED_MARKETPLACE_CASES, SEED_CONFIDENTIAL_DOSSIERS } from '../data/seedCases';
 import { db } from '../config/firebase';
 import { collection, doc, setDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
 
 const STORAGE_KEY_PROS = 'lawyerselect_professionals_v1';
 const STORAGE_KEY_CASES = 'lawyerselect_cases_v1';
+const STORAGE_KEY_DOSSIERS = 'lawyerselect_dossiers_vault_v1';
 const STORAGE_KEY_CHATS = 'lawyerselect_chats_v1';
 const STORAGE_KEY_PURCHASES = 'lawyerselect_purchases_v1';
 
 class LawyerSelectStore {
   private professionals: LegalProfessional[] = [];
   private cases: MarketplaceCase[] = [];
+  private confidentialDossiers: Map<string, CaseConfidentialDossier> = new Map();
   private chats: ChatInteraction[] = [];
   private purchases: CasePurchase[] = [];
   private listeners: Array<() => void> = [];
 
   constructor() {
     this.loadInitialData();
+    this.initFirestoreSync();
   }
 
   private loadInitialData() {
@@ -34,18 +37,56 @@ class LawyerSelectStore {
       this.saveProfessionals();
     }
 
-    // 2. Load Cases
-    const storedCases = localStorage.getItem(STORAGE_KEY_CASES);
-    if (storedCases) {
+    // 2a. Load Confidential Dossiers Vault
+    const storedDossiers = localStorage.getItem(STORAGE_KEY_DOSSIERS);
+    if (storedDossiers) {
       try {
-        this.cases = JSON.parse(storedCases);
+        const parsed: Record<string, CaseConfidentialDossier> = JSON.parse(storedDossiers);
+        this.confidentialDossiers = new Map(Object.entries(parsed));
       } catch {
-        this.cases = [...SEED_MARKETPLACE_CASES];
+        this.confidentialDossiers = new Map(Object.entries(SEED_CONFIDENTIAL_DOSSIERS));
       }
     } else {
-      this.cases = [...SEED_MARKETPLACE_CASES];
-      this.saveCases();
+      this.confidentialDossiers = new Map(Object.entries(SEED_CONFIDENTIAL_DOSSIERS));
+      this.saveDossiers();
     }
+
+    // 2b. Load Cases (Sanitizing any public PII from browser cache)
+    const storedCases = localStorage.getItem(STORAGE_KEY_CASES);
+    let loadedCases: MarketplaceCase[] = [];
+    if (storedCases) {
+      try {
+        loadedCases = JSON.parse(storedCases);
+      } catch {
+        loadedCases = [...SEED_MARKETPLACE_CASES];
+      }
+    } else {
+      loadedCases = [...SEED_MARKETPLACE_CASES];
+    }
+
+    // Scrub any legacy PII from public cases and archive into private dossiers
+    this.cases = loadedCases.map((c) => {
+      if (c.clientFullName || c.clientEmail || c.clientPhone || c.fullFactualDetails) {
+        if (!this.confidentialDossiers.has(c.id)) {
+          this.confidentialDossiers.set(c.id, {
+            caseId: c.id,
+            clientFullName: c.clientFullName || '',
+            clientEmail: c.clientEmail || '',
+            clientPhone: c.clientPhone || '',
+            fullFactualDetails: c.fullFactualDetails,
+          });
+        }
+      }
+      return {
+        ...c,
+        clientFullName: undefined,
+        clientEmail: undefined,
+        clientPhone: undefined,
+        fullFactualDetails: undefined,
+      };
+    });
+    this.saveCases();
+    this.saveDossiers();
 
     // 3. Load Chats
     const storedChats = localStorage.getItem(STORAGE_KEY_CHATS);
@@ -107,6 +148,153 @@ class LawyerSelectStore {
     }
   }
 
+  /**
+   * Real-time multi-user synchronization with Cloud Firestore.
+   * Ensures matters, profiles, chats, and claims reflect live across all client devices.
+   */
+  private initFirestoreSync() {
+    try {
+      // 1. Live Sync Marketplace Cases (guaranteeing public PII scrub)
+      onSnapshot(
+        collection(db, 'marketplace_cases'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const remoteCases: MarketplaceCase[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data() as MarketplaceCase;
+              // Mandatory PII scrub: never allow raw PII from public collection
+              remoteCases.push({
+                ...data,
+                id: docSnap.id,
+                clientFullName: undefined,
+                clientEmail: undefined,
+                clientPhone: undefined,
+                fullFactualDetails: undefined,
+              });
+            });
+
+            // Merge with local state, preserving local cases while taking latest remote data
+            const casesMap = new Map<string, MarketplaceCase>();
+            this.cases.forEach((c) => casesMap.set(c.id, c));
+            remoteCases.forEach((c) => {
+              const existing = casesMap.get(c.id);
+              casesMap.set(c.id, { ...(existing || {}), ...c });
+            });
+
+            this.cases = Array.from(casesMap.values());
+            this.saveCases();
+            this.notify();
+          }
+        },
+        (err) => {
+          console.warn('Firestore marketplace_cases sync notice:', err.message);
+        }
+      );
+
+      // 2. Live Sync Legal Professionals
+      onSnapshot(
+        collection(db, 'legal_professionals'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const remotePros: LegalProfessional[] = [];
+            snapshot.forEach((docSnap) => {
+              remotePros.push({
+                ...(docSnap.data() as LegalProfessional),
+                id: docSnap.id,
+              });
+            });
+
+            const prosMap = new Map<string, LegalProfessional>();
+            this.professionals.forEach((p) => prosMap.set(p.id, p));
+            remotePros.forEach((p) => prosMap.set(p.id, p));
+
+            this.professionals = Array.from(prosMap.values());
+            this.saveProfessionals();
+            this.notify();
+          }
+        },
+        (err) => {
+          console.warn('Firestore legal_professionals sync notice:', err.message);
+        }
+      );
+
+      // 3. Live Sync Chat Interactions
+      onSnapshot(
+        collection(db, 'chat_interactions'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const remoteChats: ChatInteraction[] = [];
+            snapshot.forEach((docSnap) => {
+              remoteChats.push({
+                ...(docSnap.data() as ChatInteraction),
+                id: docSnap.id,
+              });
+            });
+
+            const chatsMap = new Map<string, ChatInteraction>();
+            this.chats.forEach((c) => chatsMap.set(c.id, c));
+
+            remoteChats.forEach((remoteChat) => {
+              const localChat = chatsMap.get(remoteChat.id);
+              if (localChat) {
+                // Merge message histories by ID and sort chronologically
+                const msgMap = new Map<string, ChatMessage>();
+                (localChat.messages || []).forEach((m) => msgMap.set(m.id, m));
+                (remoteChat.messages || []).forEach((m) => msgMap.set(m.id, m));
+                const mergedMessages = Array.from(msgMap.values()).sort(
+                  (a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
+                );
+                chatsMap.set(remoteChat.id, {
+                  ...localChat,
+                  ...remoteChat,
+                  messages: mergedMessages,
+                });
+              } else {
+                chatsMap.set(remoteChat.id, remoteChat);
+              }
+            });
+
+            this.chats = Array.from(chatsMap.values());
+            this.saveChats();
+            this.notify();
+          }
+        },
+        (err) => {
+          console.warn('Firestore chat_interactions sync notice:', err.message);
+        }
+      );
+
+      // 4. Live Sync Case Purchases
+      onSnapshot(
+        collection(db, 'case_purchases'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const remotePurchases: CasePurchase[] = [];
+            snapshot.forEach((docSnap) => {
+              remotePurchases.push({
+                ...(docSnap.data() as CasePurchase),
+                id: docSnap.id,
+              });
+            });
+
+            const purchasesMap = new Map<string, CasePurchase>();
+            this.purchases.forEach((p) => purchasesMap.set(p.id, p));
+            remotePurchases.forEach((p) => purchasesMap.set(p.id, p));
+
+            this.purchases = Array.from(purchasesMap.values());
+            localStorage.setItem(STORAGE_KEY_PURCHASES, JSON.stringify(this.purchases));
+            this.notify();
+          }
+        },
+        (err) => {
+          console.warn('Firestore case_purchases sync notice:', err.message);
+        }
+      );
+    } catch (e: any) {
+      console.warn('Firestore live listener initialization note:', e?.message);
+    }
+  }
+
   public subscribe(listener: () => void) {
     this.listeners.push(listener);
     return () => {
@@ -144,20 +332,71 @@ class LawyerSelectStore {
   }
 
   // ==========================================
-  // MARKETPLACE CASES
+  // MARKETPLACE CASES (PII-Protected Public Feed)
   // ==========================================
-  public getMarketplaceCases(): MarketplaceCase[] {
-    return [...this.cases];
+  public getMarketplaceCases(viewerLawyerId?: string): MarketplaceCase[] {
+    return this.cases.map((c) => {
+      // Attach confidential dossier ONLY if the case is claimed AND the viewer is the claiming lawyer
+      if (c.status === 'claimed' && viewerLawyerId && c.claimedBy === viewerLawyerId) {
+        const dossier = this.confidentialDossiers.get(c.id);
+        if (dossier) {
+          return {
+            ...c,
+            clientFullName: dossier.clientFullName,
+            clientEmail: dossier.clientEmail,
+            clientPhone: dossier.clientPhone,
+            fullFactualDetails: dossier.fullFactualDetails,
+          };
+        }
+      }
+
+      // For open, locked, or claimed cases viewed by non-purchaser, PII is strictly stripped
+      return {
+        ...c,
+        clientFullName: undefined,
+        clientEmail: undefined,
+        clientPhone: undefined,
+        fullFactualDetails: undefined,
+      };
+    });
+  }
+
+  public getUnlockedCaseDossier(caseId: string, viewerLawyerId?: string): CaseConfidentialDossier | null {
+    const targetCase = this.cases.find((c) => c.id === caseId);
+    if (!targetCase || targetCase.status !== 'claimed') return null;
+    if (!viewerLawyerId || targetCase.claimedBy !== viewerLawyerId) return null;
+    return this.confidentialDossiers.get(caseId) || null;
   }
 
   public addMarketplaceCase(c: MarketplaceCase) {
-    this.cases = [c, ...this.cases.filter((existing) => existing.id !== c.id)];
+    // If incoming submission includes confidential PII, archive it securely in the vault
+    if (c.clientFullName || c.clientEmail || c.clientPhone || c.fullFactualDetails) {
+      this.confidentialDossiers.set(c.id, {
+        caseId: c.id,
+        clientFullName: c.clientFullName || '',
+        clientEmail: c.clientEmail || '',
+        clientPhone: c.clientPhone || '',
+        fullFactualDetails: c.fullFactualDetails,
+      });
+      this.saveDossiers();
+    }
+
+    // Strip PII from public case
+    const publicCase: MarketplaceCase = {
+      ...c,
+      clientFullName: undefined,
+      clientEmail: undefined,
+      clientPhone: undefined,
+      fullFactualDetails: undefined,
+    };
+
+    this.cases = [publicCase, ...this.cases.filter((existing) => existing.id !== c.id)];
     this.saveCases();
     this.notify();
 
     try {
       const docRef = doc(db, 'marketplace_cases', c.id);
-      setDoc(docRef, c, { merge: true }).catch((err) => console.warn('Firestore case sync notice:', err));
+      setDoc(docRef, publicCase, { merge: true }).catch((err) => console.warn('Firestore case sync notice:', err));
     } catch (e) {
       // offline safe
     }
@@ -198,15 +437,29 @@ class LawyerSelectStore {
     try {
       const docRef = doc(db, 'marketplace_cases', caseId);
       setDoc(docRef, targetCase, { merge: true }).catch((err) => console.warn('Firestore lead purchase sync:', err));
+      const purchaseDocRef = doc(db, 'case_purchases', purchase.id);
+      setDoc(purchaseDocRef, purchase, { merge: true }).catch((err) => console.warn('Firestore purchase sync:', err));
     } catch (e) {
       // offline safe
     }
 
-    return targetCase;
+    const dossier = this.confidentialDossiers.get(caseId);
+    return {
+      ...targetCase,
+      clientFullName: dossier?.clientFullName,
+      clientEmail: dossier?.clientEmail,
+      clientPhone: dossier?.clientPhone,
+      fullFactualDetails: dossier?.fullFactualDetails,
+    };
   }
 
   private saveCases() {
     localStorage.setItem(STORAGE_KEY_CASES, JSON.stringify(this.cases));
+  }
+
+  private saveDossiers() {
+    const obj = Object.fromEntries(this.confidentialDossiers.entries());
+    localStorage.setItem(STORAGE_KEY_DOSSIERS, JSON.stringify(obj));
   }
 
   // ==========================================
@@ -235,6 +488,7 @@ class LawyerSelectStore {
       interaction = {
         id: chatId,
         tag: 'lawyerselect',
+        source: 'lawyerselect' as any,
         clientId,
         clientName,
         clientEmail,
@@ -242,7 +496,7 @@ class LawyerSelectStore {
         lawyerName: lawyer.fullName,
         lawyerTitle: lawyer.title,
         lawyerFirm: lawyer.firmName,
-        caseId,
+        caseId: caseId || null as any,
         status: 'active',
         lastMessageSnippet: `Consultation channel opened with ${lawyer.fullName}.`,
         lastMessageAt: new Date().toISOString(),
@@ -250,7 +504,7 @@ class LawyerSelectStore {
           {
             id: 'msg_init_' + Date.now(),
             senderId: 'system',
-            senderRole: 'client',
+            senderRole: 'system',
             senderName: 'Lawyer Select Concierge',
             content: `Connected with ${lawyer.fullName} (${lawyer.title} at ${lawyer.firmName}). You can now discuss your legal matter securely.`,
             sentAt: new Date().toISOString(),
@@ -263,8 +517,9 @@ class LawyerSelectStore {
       this.notify();
 
       try {
+        const cleanPayload = JSON.parse(JSON.stringify(interaction));
         const docRef = doc(db, 'chat_interactions', interaction.id);
-        setDoc(docRef, interaction, { merge: true }).catch((err) => console.warn('Firestore chat init sync:', err));
+        setDoc(docRef, cleanPayload, { merge: true }).catch((err) => console.warn('Firestore chat init sync:', err));
       } catch (e) {
         // offline safe
       }
@@ -301,8 +556,9 @@ class LawyerSelectStore {
     this.notify();
 
     try {
+      const cleanPayload = JSON.parse(JSON.stringify(interaction));
       const docRef = doc(db, 'chat_interactions', interaction.id);
-      setDoc(docRef, interaction, { merge: true }).catch((err) => console.warn('Firestore message sync:', err));
+      setDoc(docRef, cleanPayload, { merge: true }).catch((err) => console.warn('Firestore message sync:', err));
     } catch (e) {
       // offline safe
     }

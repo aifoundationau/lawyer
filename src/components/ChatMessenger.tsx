@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, Shield, Lock, Scale, CheckCheck, Clock, UserCheck, ArrowRightLeft } from './icons';
 import { ChatInteraction, LegalProfessional } from '../types';
 import { lawyerSelectStore } from '../services/lawyerSelectStore';
 import { UserPersona } from './Navbar';
+import { useAuth } from '../context/AuthContext';
 
 interface ChatMessengerProps {
   chatInteractions: ChatInteraction[];
@@ -21,17 +22,25 @@ export const ChatMessenger: React.FC<ChatMessengerProps> = ({
   setUserPersona,
   onGoToMatchmaker,
 }) => {
+  const { currentUser, role, setShowAuthModal } = useAuth();
   const [messageInput, setMessageInput] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const currentChat = chatInteractions.find((c) => c.id === activeChatId) || chatInteractions[0];
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [currentChat?.messages?.length]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || !currentChat) return;
 
-    const senderId = userPersona === 'client' ? currentChat.clientId : currentChat.lawyerId;
-    const senderRole = userPersona === 'client' ? 'client' : 'legal_professional';
-    const senderName = userPersona === 'client' ? currentChat.clientName : currentChat.lawyerName;
+    // Securely derive sender identity from authenticated session or current role
+    const isLawyer = role === 'lawyer';
+    const senderId = currentUser ? currentUser.uid : (isLawyer ? currentChat.lawyerId : currentChat.clientId);
+    const senderRole = isLawyer ? 'legal_professional' : 'client';
+    const senderName = currentUser ? currentUser.displayName : (isLawyer ? currentChat.lawyerName : currentChat.clientName);
 
     lawyerSelectStore.sendMessage(
       currentChat.id,
@@ -68,7 +77,7 @@ export const ChatMessenger: React.FC<ChatMessengerProps> = ({
           </p>
         </div>
 
-        {/* Perspective toggle inside chat */}
+        {/* Authenticated Persona Badge */}
         <div style={{
           background: 'rgba(16, 22, 34, 0.8)',
           border: '1px solid var(--border-subtle)',
@@ -78,17 +87,20 @@ export const ChatMessenger: React.FC<ChatMessengerProps> = ({
           alignItems: 'center',
           gap: '0.75rem',
         }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Sending message as:</span>
-          <strong style={{ fontSize: '0.85rem', color: userPersona === 'client' ? '#60a5fa' : 'var(--gold-light)' }}>
-            {userPersona === 'client' ? 'Client View (David K.)' : 'Lawyer View (Elena Vance SC)'}
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Sending as:</span>
+          <strong style={{ fontSize: '0.85rem', color: role === 'lawyer' ? 'var(--gold-light)' : '#60a5fa' }}>
+            {role === 'lawyer'
+              ? `Practitioner (${currentUser?.displayName || currentChat?.lawyerName || 'Elena Vance SC'})`
+              : `Client (${currentUser?.displayName || currentChat?.clientName || 'Client'})`}
           </strong>
           <button
-            onClick={() => setUserPersona(userPersona === 'client' ? 'lawyer' : 'client')}
+            onClick={() => setShowAuthModal(true)}
             className="btn-ghost"
             style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }}
+            title="Authenticate or switch account"
           >
             <ArrowRightLeft size={12} />
-            <span>Switch Role</span>
+            <span>Switch Account</span>
           </button>
         </div>
       </div>
@@ -122,12 +134,7 @@ export const ChatMessenger: React.FC<ChatMessengerProps> = ({
         </div>
       ) : (
         /* Messenger Layout */
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 320px) 1fr',
-          gap: '1.25rem',
-          minHeight: '620px',
-        }}>
+        <div className="chat-messenger-layout">
           
           {/* Left Panel: Channels List */}
           <div className="glass-panel" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -237,6 +244,28 @@ export const ChatMessenger: React.FC<ChatMessengerProps> = ({
                 maxHeight: '440px',
               }}>
                 {currentChat.messages.map((msg) => {
+                  if (msg.senderRole === 'system') {
+                    return (
+                      <div
+                        key={msg.id}
+                        style={{
+                          alignSelf: 'center',
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: '20px',
+                          padding: '0.45rem 1.1rem',
+                          fontSize: '0.78rem',
+                          color: 'var(--text-dim)',
+                          textAlign: 'center',
+                          maxWidth: '90%',
+                          margin: '0.25rem auto',
+                        }}
+                      >
+                        🔒 {msg.content}
+                      </div>
+                    );
+                  }
+
                   const isMe = (userPersona === 'client' && msg.senderRole === 'client') ||
                                (userPersona === 'lawyer' && msg.senderRole === 'legal_professional');
 
@@ -279,6 +308,7 @@ export const ChatMessenger: React.FC<ChatMessengerProps> = ({
                     </div>
                   );
                 })}
+                <div ref={messagesEndRef} />
               </div>
 
               {/* Message Input Box */}

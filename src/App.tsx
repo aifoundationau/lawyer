@@ -7,6 +7,7 @@ import { PostCaseIntake } from './components/PostCaseIntake';
 import { AiLawyerOnboarding } from './components/AiLawyerOnboarding';
 import { ChatMessenger } from './components/ChatMessenger';
 import { LegalDirectory } from './components/LegalDirectory';
+import { LegalCorpusExplorer } from './components/LegalCorpusExplorer';
 import { lawyerSelectStore } from './services/lawyerSelectStore';
 import { LegalProfessional, MarketplaceCase, ChatInteraction } from './types';
 import { Scale, ShieldCheck, Lock, Sparkles, Heart } from './components/icons';
@@ -138,6 +139,14 @@ export default function App() {
           <LegalDirectory
             professionals={professionals}
             onSelectLawyer={handleOpenChatWithLawyer}
+          />
+        )}
+
+        {activeTab === 'corpus' && (
+          <LegalCorpusExplorer
+            onSelectTopic={() => {
+              setActiveTab('matchmaker');
+            }}
           />
         )}
       </main>

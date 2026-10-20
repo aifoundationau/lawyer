@@ -1,6 +1,6 @@
-import { Scale, Briefcase, FileText, Sparkles, MessageSquare, Users, Shield, UserCheck, ArrowRightLeft } from './icons';
+import { Scale, Briefcase, FileText, Sparkles, MessageSquare, Users, Shield, UserCheck, ArrowRightLeft, BookOpen } from './icons';
 
-export type ActiveTab = 'matchmaker' | 'caseboard' | 'postcase' | 'onboarding' | 'chat' | 'directory';
+export type ActiveTab = 'matchmaker' | 'caseboard' | 'postcase' | 'onboarding' | 'chat' | 'directory' | 'corpus';
 export type UserPersona = 'client' | 'lawyer';
 
 interface NavbarProps {
@@ -231,6 +231,28 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Users size={15} />
             <span>Directory</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('corpus')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.5rem 0.9rem',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              border: 'none',
+              background: activeTab === 'corpus' ? 'rgba(229, 169, 60, 0.18)' : 'transparent',
+              color: activeTab === 'corpus' ? 'var(--gold-light)' : 'var(--text-muted)',
+              borderBottom: activeTab === 'corpus' ? '1px solid var(--gold-primary)' : '1px solid transparent',
+              transition: 'all 0.2s',
+            }}
+          >
+            <BookOpen size={15} />
+            <span>Legal Corpus (OALC)</span>
           </button>
         </nav>
 

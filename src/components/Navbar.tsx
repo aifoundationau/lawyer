@@ -252,7 +252,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
           >
             <BookOpen size={15} />
-            <span>Legal Corpus (OALC)</span>
+            <span>Legal Library</span>
           </button>
         </nav>
 

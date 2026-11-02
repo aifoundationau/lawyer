@@ -1,16 +1,15 @@
 # Lawyer Select - Next Instructions & Worklist
 
 ## Current Status
+- Git Sync Complete: All local code, components, services, and tests committed and pushed to `https://github.com/aifoundationau/lawyer.git` (`origin/master`).
 - Lawyer Registration Portal (`Register` Tab):
   - Renamed `"Legal Pro AI Intake"` to **`"Register"`** in `src/components/Navbar.tsx`.
-  - Step 1 (Google Supporter Gate): Explains one-box lawyer registration, 256-bit AES encryption, and token-gated contact release. Requires the lawyer to first register/sign in with Google (`Sign In with Google`).
-  - Step 2 (Lawyer Application Form): Unlocks immediately after Google Sign-In. Parses pasted qualifications, experience, and notable cases into all 17 categories, encrypts with 256-bit AES-GCM (`src/services/encryptionService.ts`), and stores in Firebase (`lawyer_applications` & `legal_professionals`).
-- AI Agent Skill Created: `.agents/skills/legal-practitioner-dossier-parser/SKILL.md` engineered for 100% reliability across all AI models (`Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
-- Geolocation & Regional Settings Widget Mounted: `<GeoFooterWidget />` live at the bottom of `src/App.tsx`.
-- Pinned Google Sign-In & SuperAdmin Authorization: Active in top right of Navbar.
-- Decommissioned Case Leads: Removed across Navbar, HeroBanner, and App.
-- Data Contracts: Updated `data-contracts.md` with Domain 14 (17-Category Lawyer Application Dossier & 256-Bit AES Encryption).
+  - Step 1 (Google Supporter Gate): Explains one-box lawyer registration, 256-bit AES encryption, and token-gated contact release. Requires signing in with Google.
+  - Step 2 (Lawyer Application Form): Unlocks immediately after Google Sign-In. Extracts pasted CV/cases into all 17 categories, encrypts with 256-bit AES-GCM (`src/services/encryptionService.ts`), and stores in Firebase (`lawyer_applications` & `legal_professionals`).
+- AI Agent Skill: `.agents/skills/legal-practitioner-dossier-parser/SKILL.md` engineered for 100% deterministic reliability across all AI models (`Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+- Firestore Security Rules: Verified and up to date for all collections including Domain 14 (`lawyer_applications/{appId}` with 256-bit AES-GCM checks). Validated via Firebase CLI with 0 errors.
+- Geolocation & Regional Settings Widget: `<GeoFooterWidget />` mounted at the bottom of `src/App.tsx` with live Open-Meteo weather and free daily AUD/USD currency converter.
+- Pinned Google Sign-In & SuperAdmin Authorization: Verified in top right of Navbar.
 
 ## Next Steps
-1. User tests the new `"Register"` tab in the browser (`http://localhost:3000/`): verify Step 1 (Google Supporter Gate) and Step 2 (Lawyer Application Form with 17 categories & 256-bit AES encryption).
-2. User commits and pushes all updates to GitHub: `git add . && git commit -m "feat: add Google-gated lawyer Register portal with 17-category AI parser and 256-bit encryption" && git push -u origin master`.
+1. Verify live registration submission in the browser: sign in with Google, click "Load Sample 1", and submit the 256-bit encrypted lawyer application to confirm it saves to Firestore and appears in the Lawyer Directory.

@@ -11,6 +11,7 @@ import { LegalProfessional, MarketplaceCase, ChatInteraction } from './types';
 import { Scale, ShieldCheck, Lock, Sparkles, Heart } from './components/icons';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthModal } from './components/AuthModal';
+import { GeoFooterWidget } from './components/GeoFooterWidget';
 
 function AppContent() {
   const { currentUser, role } = useAuth();
@@ -92,7 +93,7 @@ function AppContent() {
         }
 
         setUserPersona('lawyer');
-        setActiveTab('caseboard');
+        setActiveTab('directory');
       };
 
       verifyAndUnlock();
@@ -132,7 +133,7 @@ function AppContent() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', paddingBottom: '38px' }}>
       {/* Authentication Modal */}
       <AuthModal />
       
@@ -283,6 +284,8 @@ function AppContent() {
         </div>
       </footer>
 
+      {/* Geolocation, Weather, Time & Daily AUD/USD Converter Thin Footer Bar */}
+      <GeoFooterWidget />
     </div>
   );
 }

@@ -1,19 +1,18 @@
 # Lawyer Select - Next Instructions & Worklist
 
 ## Current Status
+- Geolocation & Regional Settings Widget Mounted: `<GeoFooterWidget />` is live at the bottom of `src/App.tsx`. Includes thin bottom footer bar (suburb, weather, live time, daily AUD/USD rate) and centered popup (responsive, strictly NO scrollbar, location changer, auto-detect GPS, date/time format customizer, and interactive daily AUD to USD converter using free API).
+- Pinned Google Sign-In: Google Sign-In button styled as a high-visibility white pill with official Google 'G' icon, pinned to the top right of the navbar (`marginLeft: auto`, `flexShrink: 0`, `flexWrap: nowrap`).
+- SuperAdmin Authorization: Configured `isSuperAdminEmail` verifying Firebase Admin account (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified admin addresses, and displaying gold SuperAdmin badge only for authorized superadmins.
 - Decommissioned Case Leads: Removed Case Feed ($20 Leads), Post a Legal Matter tab, and all case lead exchange buttons/cards from Navbar, HeroBanner, and App.
 - Focused Service Model: Retained AI Top 3 Matchmaker, Legal Professional/Firm AI Onboarding, Direct Chat, Lawyer Directory, and Open Australian Legal Corpus Library.
-- Authentication UI: Removed "Guest Client", "Consumer Client", and "Switch" buttons.
-- Google Sign-In: Added Google login icon to the far right header.
-- SuperAdmin Authorization: Configured `isSuperAdminEmail` verifying Firebase Admin account (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified admin addresses, and displaying gold SuperAdmin badge only for authorized superadmins.
+- Data Contracts: Updated `data-contracts.md` with Domain 13 (Geolocation, Localization & Daily AUD/USD Currency Converter).
 - Drive Lock: Project strictly bound to drive `E:\` only. Drive `Z:\` completely bypassed.
-- IDE Terminal Config: Added `.vscode/settings.json` configuring Command Prompt as default profile with shell integration disabled.
 - Git Remote: Configured for `https://github.com/aifoundationau/lawyer.git` (`origin`) in `.git/config`.
 - Security Lock: `.gitignore` secures all `.env*`, keys, service account credentials, logs, and audit files.
 - Database: Connected to Firebase Project `ai-foundation-firebase`, named Firestore database `lawyerselect` (nam5).
 
 ## Next Steps
-1. User commits and pushes the clean updates to GitHub: `https://github.com/aifoundationau/lawyer.git`.
-2. Developer runs `npm run dev` in Command Prompt terminal.
-3. Request user permission to apply the UI updates for the Dual Registration Form (Law Firm vs Individual Practitioner) with the unified AI "One Blob" input box and 4-pillar editable Information Sheet.
-4. Present one task/instruction at a time to the user.
+1. User verifies the new thin Geolocation & Currency footer bar and centered settings popup in the browser.
+2. User commits and pushes all updates to GitHub: `git add . && git commit -m "feat: add geolocation footer widget and regional currency converter" && git push -u origin master`.
+3. Proceed to Dual Registration Form (Law Firm vs Individual Practitioner) with unified AI "One Blob" input box.

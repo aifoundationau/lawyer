@@ -498,3 +498,25 @@ export interface PractitionerRegistration {
   updatedAt: string;
 }
 
+export type DateFormatOption = 'DD/MM/YYYY' | 'YYYY-MM-DD' | 'DD MMM YYYY' | 'MM/DD/YYYY';
+export type TimeFormatOption = '12h' | '24h';
+
+export interface GeoLocationSettings {
+  suburb: string;
+  state: string;
+  country: string;
+  postcode?: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  dateFormat: DateFormatOption;
+  timeFormat: TimeFormatOption;
+  isAutoDetected: boolean;
+  weatherTempC?: number;
+  weatherCondition?: string;
+  weatherCode?: number;
+  audToUsdRate: number;
+  rateLastUpdated?: string;
+}
+
+

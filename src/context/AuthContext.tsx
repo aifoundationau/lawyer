@@ -153,9 +153,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Google Sign-In notice:', err.message);
     }
   };
-      signInAsDemoClient('Google Verified Client', 'client.verified@gmail.com');
-    }
-  };
 
   const signUpCustom = (name: string, email: string, role: UserRole, phone?: string) => {
     const newUser: UserAccount = {

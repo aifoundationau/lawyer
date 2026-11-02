@@ -250,34 +250,6 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 
 ---
 
-### Domain 12: SuperAdmin Authentication & Google Identity Provider
-*Authentication Mechanism*: Google OAuth 2.0 via Firebase Client SDK / Firebase Auth (`signInWithPopup(auth, provider)`).
-
-| Identity Class | Authority Criterion | Role Claim | Capabilities |
-| :--- | :--- | :--- | :--- |
-| **SuperAdmin** | Firebase Admin service email (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified bootstrap admin emails (`admin@lawyerselect.com.au`, `superadmin@lawyerselect.com.au`, `support@aifoundation.net.au`), or verified token custom claims (`superadmin: true`). | `superadmin` | Catalog item CRUD, token price setting, platform settings override, manual approval of law firms & individual practitioners, dispute & refund processing. |
-| **Standard User / Client** | Any standard Google account authenticated via popup. | `client` | Inquiries, AI matching, case posting, chat, and review. |
-| **Guest / Anonymous** | Unauthenticated visitor. Clean UI with zero mock badges. Google login icon displayed in far right header. | `guest` | Read-only directory and legal corpus explorer access. |
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "SuperAdminIdentityContract",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["uid", "email", "role", "isSuperAdmin"],
-  "properties": {
-    "uid": { "type": "string" },
-    "email": { "type": "string", "format": "email" },
-    "displayName": { "type": "string" },
-    "role": { "type": "string", "enum": ["superadmin", "lawyer", "client", "guest"] },
-    "photoURL": { "type": "string" },
-    "isSuperAdmin": { "type": "boolean" }
-  }
-}
-```
----
-
 ### Domain 7: Products & Services Catalog (`products_and_services`)
 *Ingestion Channels*: SuperAdmin Item CRUD (`/api/admin/products`).  
 *Description*: All items, lead types, and platform features sold on Lawyer Select. SuperAdmin sets the token amount for every product/service.
@@ -369,6 +341,66 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
   }
 }
 ```
+
+---
+
+### Domain 13: Geolocation, Localization & Daily AUD/USD Currency Converter (`lawyerselect_geo_settings_v1`)
+*Mechanism*: Browser `navigator.geolocation` + Reverse Geocoding (`api.bigdatacloud.net`), Weather API (`api.open-meteo.com`), and Free Daily Exchange Rate API (`open.er-api.com` / `api.frankfurter.app`).
+
+| Field Name | Type | Ingestion Channel | Classification | Invariants & Constraints | Storage & Lifecycle |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `suburb` | String | Browser Auto-detect / User Select | Regional Localization | Australian Suburb / Locality name. Default: `'Sydney CBD'`. | Client LocalStorage (`lawyerselect_geo_settings_v1`) |
+| `state` | String Enum | Browser Auto-detect / User Select | Regional Localization | Enum: `['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT', 'NZ', 'OTHER']`. Default: `'NSW'`. | Client LocalStorage |
+| `country` | String | Browser Auto-detect | Regional Localization | Default: `'Australia'`. | Client LocalStorage |
+| `latitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 latitude (`-90.0 .. 90.0`). Default: `-33.8688`. | Client LocalStorage |
+| `longitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 longitude (`-180.0 .. 180.0`). Default: `151.2093`. | Client LocalStorage |
+| `timezone` | String | `Intl.DateTimeFormat` / User Select | Time Localization | Valid IANA Timezone string (e.g. `'Australia/Sydney'`). | Client LocalStorage |
+| `dateFormat` | String Enum | User Select | Display Preference | Enum: `['DD/MM/YYYY', 'YYYY-MM-DD', 'DD MMM YYYY', 'MM/DD/YYYY']`. Default: `'DD/MM/YYYY'`. | Client LocalStorage |
+| `timeFormat` | String Enum | User Select | Display Preference | Enum: `['12h', '24h']`. Default: `'12h'`. | Client LocalStorage |
+| `isAutoDetected` | Boolean | Browser Geolocation API | Operational State | `true` if coordinates resolved via GPS/browser; `false` if manual. | Client LocalStorage |
+| `weatherTempC` | Integer | Open-Meteo API | Environmental Telemetry | Round integer degrees Celsius (`Math.round`). Free Open API. | Ephemeral / In-Memory |
+| `weatherCondition` | String | Open-Meteo WMO Code Mapping | Environmental Telemetry | Human-readable condition (e.g. `'Clear Sky'`, `'Partly Cloudy'`). | Ephemeral / In-Memory |
+| `audToUsdRate` | Number | Open ER / Frankfurter API | Financial Rate | Strictly formatted to **max 3 decimal places** (`Math.round(rate * 1000) / 1000`). | Client LocalStorage & Memory |
+| `rateLastUpdated` | Timestamp | Free Exchange API Ingestion | Financial Audit | ISO 8601 UTC timestamp. | Client LocalStorage |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GeoLocationSettingsContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "suburb",
+    "state",
+    "country",
+    "latitude",
+    "longitude",
+    "timezone",
+    "dateFormat",
+    "timeFormat",
+    "isAutoDetected",
+    "audToUsdRate"
+  ],
+  "properties": {
+    "suburb": { "type": "string" },
+    "state": { "type": "string", "enum": ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT", "NZ", "OTHER"] },
+    "country": { "type": "string" },
+    "postcode": { "type": "string" },
+    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+    "timezone": { "type": "string" },
+    "dateFormat": { "type": "string", "enum": ["DD/MM/YYYY", "YYYY-MM-DD", "DD MMM YYYY", "MM/DD/YYYY"] },
+    "timeFormat": { "type": "string", "enum": ["12h", "24h"] },
+    "isAutoDetected": { "type": "boolean" },
+    "weatherTempC": { "type": "integer" },
+    "weatherCondition": { "type": "string" },
+    "weatherCode": { "type": "integer" },
+    "audToUsdRate": { "type": "number" },
+    "rateLastUpdated": { "type": "string", "format": "date-time" }
+  }
+}
+```
+
 ---
 
 ### Domain 8: SuperAdmin Direct Inquiries & Refund Requests (`superadmin_messages`)
@@ -465,6 +497,66 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
   }
 }
 ```
+
+---
+
+### Domain 13: Geolocation, Localization & Daily AUD/USD Currency Converter (`lawyerselect_geo_settings_v1`)
+*Mechanism*: Browser `navigator.geolocation` + Reverse Geocoding (`api.bigdatacloud.net`), Weather API (`api.open-meteo.com`), and Free Daily Exchange Rate API (`open.er-api.com` / `api.frankfurter.app`).
+
+| Field Name | Type | Ingestion Channel | Classification | Invariants & Constraints | Storage & Lifecycle |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `suburb` | String | Browser Auto-detect / User Select | Regional Localization | Australian Suburb / Locality name. Default: `'Sydney CBD'`. | Client LocalStorage (`lawyerselect_geo_settings_v1`) |
+| `state` | String Enum | Browser Auto-detect / User Select | Regional Localization | Enum: `['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT', 'NZ', 'OTHER']`. Default: `'NSW'`. | Client LocalStorage |
+| `country` | String | Browser Auto-detect | Regional Localization | Default: `'Australia'`. | Client LocalStorage |
+| `latitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 latitude (`-90.0 .. 90.0`). Default: `-33.8688`. | Client LocalStorage |
+| `longitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 longitude (`-180.0 .. 180.0`). Default: `151.2093`. | Client LocalStorage |
+| `timezone` | String | `Intl.DateTimeFormat` / User Select | Time Localization | Valid IANA Timezone string (e.g. `'Australia/Sydney'`). | Client LocalStorage |
+| `dateFormat` | String Enum | User Select | Display Preference | Enum: `['DD/MM/YYYY', 'YYYY-MM-DD', 'DD MMM YYYY', 'MM/DD/YYYY']`. Default: `'DD/MM/YYYY'`. | Client LocalStorage |
+| `timeFormat` | String Enum | User Select | Display Preference | Enum: `['12h', '24h']`. Default: `'12h'`. | Client LocalStorage |
+| `isAutoDetected` | Boolean | Browser Geolocation API | Operational State | `true` if coordinates resolved via GPS/browser; `false` if manual. | Client LocalStorage |
+| `weatherTempC` | Integer | Open-Meteo API | Environmental Telemetry | Round integer degrees Celsius (`Math.round`). Free Open API. | Ephemeral / In-Memory |
+| `weatherCondition` | String | Open-Meteo WMO Code Mapping | Environmental Telemetry | Human-readable condition (e.g. `'Clear Sky'`, `'Partly Cloudy'`). | Ephemeral / In-Memory |
+| `audToUsdRate` | Number | Open ER / Frankfurter API | Financial Rate | Strictly formatted to **max 3 decimal places** (`Math.round(rate * 1000) / 1000`). | Client LocalStorage & Memory |
+| `rateLastUpdated` | Timestamp | Free Exchange API Ingestion | Financial Audit | ISO 8601 UTC timestamp. | Client LocalStorage |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GeoLocationSettingsContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "suburb",
+    "state",
+    "country",
+    "latitude",
+    "longitude",
+    "timezone",
+    "dateFormat",
+    "timeFormat",
+    "isAutoDetected",
+    "audToUsdRate"
+  ],
+  "properties": {
+    "suburb": { "type": "string" },
+    "state": { "type": "string", "enum": ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT", "NZ", "OTHER"] },
+    "country": { "type": "string" },
+    "postcode": { "type": "string" },
+    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+    "timezone": { "type": "string" },
+    "dateFormat": { "type": "string", "enum": ["DD/MM/YYYY", "YYYY-MM-DD", "DD MMM YYYY", "MM/DD/YYYY"] },
+    "timeFormat": { "type": "string", "enum": ["12h", "24h"] },
+    "isAutoDetected": { "type": "boolean" },
+    "weatherTempC": { "type": "integer" },
+    "weatherCondition": { "type": "string" },
+    "weatherCode": { "type": "integer" },
+    "audToUsdRate": { "type": "number" },
+    "rateLastUpdated": { "type": "string", "format": "date-time" }
+  }
+}
+```
+
 ---
 
 ### Domain 9: Terms of Service & Token Economy Disclaimers Contract
@@ -657,6 +749,66 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
   }
 }
 ```
+
+---
+
+### Domain 13: Geolocation, Localization & Daily AUD/USD Currency Converter (`lawyerselect_geo_settings_v1`)
+*Mechanism*: Browser `navigator.geolocation` + Reverse Geocoding (`api.bigdatacloud.net`), Weather API (`api.open-meteo.com`), and Free Daily Exchange Rate API (`open.er-api.com` / `api.frankfurter.app`).
+
+| Field Name | Type | Ingestion Channel | Classification | Invariants & Constraints | Storage & Lifecycle |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `suburb` | String | Browser Auto-detect / User Select | Regional Localization | Australian Suburb / Locality name. Default: `'Sydney CBD'`. | Client LocalStorage (`lawyerselect_geo_settings_v1`) |
+| `state` | String Enum | Browser Auto-detect / User Select | Regional Localization | Enum: `['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT', 'NZ', 'OTHER']`. Default: `'NSW'`. | Client LocalStorage |
+| `country` | String | Browser Auto-detect | Regional Localization | Default: `'Australia'`. | Client LocalStorage |
+| `latitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 latitude (`-90.0 .. 90.0`). Default: `-33.8688`. | Client LocalStorage |
+| `longitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 longitude (`-180.0 .. 180.0`). Default: `151.2093`. | Client LocalStorage |
+| `timezone` | String | `Intl.DateTimeFormat` / User Select | Time Localization | Valid IANA Timezone string (e.g. `'Australia/Sydney'`). | Client LocalStorage |
+| `dateFormat` | String Enum | User Select | Display Preference | Enum: `['DD/MM/YYYY', 'YYYY-MM-DD', 'DD MMM YYYY', 'MM/DD/YYYY']`. Default: `'DD/MM/YYYY'`. | Client LocalStorage |
+| `timeFormat` | String Enum | User Select | Display Preference | Enum: `['12h', '24h']`. Default: `'12h'`. | Client LocalStorage |
+| `isAutoDetected` | Boolean | Browser Geolocation API | Operational State | `true` if coordinates resolved via GPS/browser; `false` if manual. | Client LocalStorage |
+| `weatherTempC` | Integer | Open-Meteo API | Environmental Telemetry | Round integer degrees Celsius (`Math.round`). Free Open API. | Ephemeral / In-Memory |
+| `weatherCondition` | String | Open-Meteo WMO Code Mapping | Environmental Telemetry | Human-readable condition (e.g. `'Clear Sky'`, `'Partly Cloudy'`). | Ephemeral / In-Memory |
+| `audToUsdRate` | Number | Open ER / Frankfurter API | Financial Rate | Strictly formatted to **max 3 decimal places** (`Math.round(rate * 1000) / 1000`). | Client LocalStorage & Memory |
+| `rateLastUpdated` | Timestamp | Free Exchange API Ingestion | Financial Audit | ISO 8601 UTC timestamp. | Client LocalStorage |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GeoLocationSettingsContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "suburb",
+    "state",
+    "country",
+    "latitude",
+    "longitude",
+    "timezone",
+    "dateFormat",
+    "timeFormat",
+    "isAutoDetected",
+    "audToUsdRate"
+  ],
+  "properties": {
+    "suburb": { "type": "string" },
+    "state": { "type": "string", "enum": ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT", "NZ", "OTHER"] },
+    "country": { "type": "string" },
+    "postcode": { "type": "string" },
+    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+    "timezone": { "type": "string" },
+    "dateFormat": { "type": "string", "enum": ["DD/MM/YYYY", "YYYY-MM-DD", "DD MMM YYYY", "MM/DD/YYYY"] },
+    "timeFormat": { "type": "string", "enum": ["12h", "24h"] },
+    "isAutoDetected": { "type": "boolean" },
+    "weatherTempC": { "type": "integer" },
+    "weatherCondition": { "type": "string" },
+    "weatherCode": { "type": "integer" },
+    "audToUsdRate": { "type": "number" },
+    "rateLastUpdated": { "type": "string", "format": "date-time" }
+  }
+}
+```
+
 ---
 
 ### Domain 11: Individual Practitioner Registration & KYC Profile (`practitioner_registrations`)
@@ -890,4 +1042,64 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
   }
 }
 ```
+
+---
+
+### Domain 13: Geolocation, Localization & Daily AUD/USD Currency Converter (`lawyerselect_geo_settings_v1`)
+*Mechanism*: Browser `navigator.geolocation` + Reverse Geocoding (`api.bigdatacloud.net`), Weather API (`api.open-meteo.com`), and Free Daily Exchange Rate API (`open.er-api.com` / `api.frankfurter.app`).
+
+| Field Name | Type | Ingestion Channel | Classification | Invariants & Constraints | Storage & Lifecycle |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `suburb` | String | Browser Auto-detect / User Select | Regional Localization | Australian Suburb / Locality name. Default: `'Sydney CBD'`. | Client LocalStorage (`lawyerselect_geo_settings_v1`) |
+| `state` | String Enum | Browser Auto-detect / User Select | Regional Localization | Enum: `['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT', 'NZ', 'OTHER']`. Default: `'NSW'`. | Client LocalStorage |
+| `country` | String | Browser Auto-detect | Regional Localization | Default: `'Australia'`. | Client LocalStorage |
+| `latitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 latitude (`-90.0 .. 90.0`). Default: `-33.8688`. | Client LocalStorage |
+| `longitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 longitude (`-180.0 .. 180.0`). Default: `151.2093`. | Client LocalStorage |
+| `timezone` | String | `Intl.DateTimeFormat` / User Select | Time Localization | Valid IANA Timezone string (e.g. `'Australia/Sydney'`). | Client LocalStorage |
+| `dateFormat` | String Enum | User Select | Display Preference | Enum: `['DD/MM/YYYY', 'YYYY-MM-DD', 'DD MMM YYYY', 'MM/DD/YYYY']`. Default: `'DD/MM/YYYY'`. | Client LocalStorage |
+| `timeFormat` | String Enum | User Select | Display Preference | Enum: `['12h', '24h']`. Default: `'12h'`. | Client LocalStorage |
+| `isAutoDetected` | Boolean | Browser Geolocation API | Operational State | `true` if coordinates resolved via GPS/browser; `false` if manual. | Client LocalStorage |
+| `weatherTempC` | Integer | Open-Meteo API | Environmental Telemetry | Round integer degrees Celsius (`Math.round`). Free Open API. | Ephemeral / In-Memory |
+| `weatherCondition` | String | Open-Meteo WMO Code Mapping | Environmental Telemetry | Human-readable condition (e.g. `'Clear Sky'`, `'Partly Cloudy'`). | Ephemeral / In-Memory |
+| `audToUsdRate` | Number | Open ER / Frankfurter API | Financial Rate | Strictly formatted to **max 3 decimal places** (`Math.round(rate * 1000) / 1000`). | Client LocalStorage & Memory |
+| `rateLastUpdated` | Timestamp | Free Exchange API Ingestion | Financial Audit | ISO 8601 UTC timestamp. | Client LocalStorage |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GeoLocationSettingsContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "suburb",
+    "state",
+    "country",
+    "latitude",
+    "longitude",
+    "timezone",
+    "dateFormat",
+    "timeFormat",
+    "isAutoDetected",
+    "audToUsdRate"
+  ],
+  "properties": {
+    "suburb": { "type": "string" },
+    "state": { "type": "string", "enum": ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT", "NZ", "OTHER"] },
+    "country": { "type": "string" },
+    "postcode": { "type": "string" },
+    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+    "timezone": { "type": "string" },
+    "dateFormat": { "type": "string", "enum": ["DD/MM/YYYY", "YYYY-MM-DD", "DD MMM YYYY", "MM/DD/YYYY"] },
+    "timeFormat": { "type": "string", "enum": ["12h", "24h"] },
+    "isAutoDetected": { "type": "boolean" },
+    "weatherTempC": { "type": "integer" },
+    "weatherCondition": { "type": "string" },
+    "weatherCode": { "type": "integer" },
+    "audToUsdRate": { "type": "number" },
+    "rateLastUpdated": { "type": "string", "format": "date-time" }
+  }
+}
+```
+
 

@@ -315,121 +315,6 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 
 ---
 
-### Domain 12: SuperAdmin Authentication & Google Identity Provider
-*Authentication Mechanism*: Google OAuth 2.0 via Firebase Client SDK / Firebase Auth (`signInWithPopup(auth, provider)`).
-
-| Identity Class | Authority Criterion | Role Claim | Capabilities |
-| :--- | :--- | :--- | :--- |
-| **SuperAdmin** | Firebase Admin service email (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified bootstrap admin emails (`admin@lawyerselect.com.au`, `superadmin@lawyerselect.com.au`, `support@aifoundation.net.au`), or verified token custom claims (`superadmin: true`). | `superadmin` | Catalog item CRUD, token price setting, platform settings override, manual approval of law firms & individual practitioners, dispute & refund processing. |
-| **Standard User / Client** | Any standard Google account authenticated via popup. | `client` | Inquiries, AI matching, case posting, chat, and review. |
-| **Guest / Anonymous** | Unauthenticated visitor. Clean UI with zero mock badges. Google login icon displayed in far right header. | `guest` | Read-only directory and legal corpus explorer access. |
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "SuperAdminIdentityContract",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["uid", "email", "role", "isSuperAdmin"],
-  "properties": {
-    "uid": { "type": "string" },
-    "email": { "type": "string", "format": "email" },
-    "displayName": { "type": "string" },
-    "role": { "type": "string", "enum": ["superadmin", "lawyer", "client", "guest"] },
-    "photoURL": { "type": "string" },
-    "isSuperAdmin": { "type": "boolean" }
-  }
-}
-```
-
----
-
-### Domain 13: Geolocation, Localization & Daily AUD/USD Currency Converter (`lawyerselect_geo_settings_v1`)
-*Mechanism*: Browser `navigator.geolocation` + Reverse Geocoding (`api.bigdatacloud.net`), Weather API (`api.open-meteo.com`), and Free Daily Exchange Rate API (`open.er-api.com` / `api.frankfurter.app`).
-
-| Field Name | Type | Ingestion Channel | Classification | Invariants & Constraints | Storage & Lifecycle |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `suburb` | String | Browser Auto-detect / User Select | Regional Localization | Australian Suburb / Locality name. Default: `'Sydney CBD'`. | Client LocalStorage (`lawyerselect_geo_settings_v1`) |
-| `state` | String Enum | Browser Auto-detect / User Select | Regional Localization | Enum: `['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT', 'NZ', 'OTHER']`. Default: `'NSW'`. | Client LocalStorage |
-| `country` | String | Browser Auto-detect | Regional Localization | Default: `'Australia'`. | Client LocalStorage |
-| `latitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 latitude (`-90.0 .. 90.0`). Default: `-33.8688`. | Client LocalStorage |
-| `longitude` | Number | Geolocation / Coordinates | Coordinate Float | Valid WGS84 longitude (`-180.0 .. 180.0`). Default: `151.2093`. | Client LocalStorage |
-| `timezone` | String | `Intl.DateTimeFormat` / User Select | Time Localization | Valid IANA Timezone string (e.g. `'Australia/Sydney'`). | Client LocalStorage |
-| `dateFormat` | String Enum | User Select | Display Preference | Enum: `['DD/MM/YYYY', 'YYYY-MM-DD', 'DD MMM YYYY', 'MM/DD/YYYY']`. Default: `'DD/MM/YYYY'`. | Client LocalStorage |
-| `timeFormat` | String Enum | User Select | Display Preference | Enum: `['12h', '24h']`. Default: `'12h'`. | Client LocalStorage |
-| `isAutoDetected` | Boolean | Browser Geolocation API | Operational State | `true` if coordinates resolved via GPS/browser; `false` if manual. | Client LocalStorage |
-| `weatherTempC` | Integer | Open-Meteo API | Environmental Telemetry | Round integer degrees Celsius (`Math.round`). Free Open API. | Ephemeral / In-Memory |
-| `weatherCondition` | String | Open-Meteo WMO Code Mapping | Environmental Telemetry | Human-readable condition (e.g. `'Clear Sky'`, `'Partly Cloudy'`). | Ephemeral / In-Memory |
-| `audToUsdRate` | Number | Open ER / Frankfurter API | Financial Rate | Strictly formatted to **max 3 decimal places** (`Math.round(rate * 1000) / 1000`). | Client LocalStorage & Memory |
-| `rateLastUpdated` | Timestamp | Free Exchange API Ingestion | Financial Audit | ISO 8601 UTC timestamp. | Client LocalStorage |
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "GeoLocationSettingsContract",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "suburb",
-    "state",
-    "country",
-    "latitude",
-    "longitude",
-    "timezone",
-    "dateFormat",
-    "timeFormat",
-    "isAutoDetected",
-    "audToUsdRate"
-  ],
-  "properties": {
-    "suburb": { "type": "string" },
-    "state": { "type": "string", "enum": ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT", "NZ", "OTHER"] },
-    "country": { "type": "string" },
-    "postcode": { "type": "string" },
-    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
-    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
-    "timezone": { "type": "string" },
-    "dateFormat": { "type": "string", "enum": ["DD/MM/YYYY", "YYYY-MM-DD", "DD MMM YYYY", "MM/DD/YYYY"] },
-    "timeFormat": { "type": "string", "enum": ["12h", "24h"] },
-    "isAutoDetected": { "type": "boolean" },
-    "weatherTempC": { "type": "integer" },
-    "weatherCondition": { "type": "string" },
-    "weatherCode": { "type": "integer" },
-    "audToUsdRate": { "type": "number" },
-    "rateLastUpdated": { "type": "string", "format": "date-time" }
-  }
-}
-```
-
----
-
-### Domain 14: 17-Category Lawyer Application Dossier (`lawyer_applications`)
-*Ingestion Channels*: `Register` Portal (Google Supporter Gate -> Single AI Paste Box -> 256-Bit AES-GCM Encryption -> Firestore `lawyer_applications/{id}`).
-*AI Agent Skill*: `.agents/skills/legal-practitioner-dossier-parser/SKILL.md` (compatible with `Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
-
-| Category # | Category Name | Schema Field(s) | Invariants & Security |
-| :--- | :--- | :--- | :--- |
-| **1** | Location | `locationJurisdiction`, `locationCitySuburb`, `primaryOfficeAddress` | Valid AU Jurisdiction (`NSW`, `VIC`, `QLD`, `WA`, `SA`, `TAS`, `ACT`, `NT`, `Federal`). |
-| **2** | Practice Areas | `practiceAreas` | Non-empty array of `PracticeArea` enums. |
-| **3** | Bar Admissions & Licensing | `barAdmissionStatus`, `yearAdmitted`, `regulatoryBodyId` | `yearAdmitted` strict whole integer. |
-| **4** | Firm or Employer Affiliation | `firmOrEmployerAffiliation`, `affiliationType` | Firm, Chambers, Solo, or In-House. |
-| **5** | Experience Level & Seniority | `yearsOfPractice`, `seniorityTitle` | `yearsOfPractice` strict whole integer (`Math.ceil`). |
-| **6** | Past Legal Work Experience | `pastLegalWorkExperience` | Array of previous firms, clerkships, and government roles. |
-| **7** | Career Milestones & Roles | `careerMilestonesAndRoles` | Chronological career progression array. |
-| **8** | Formal Education & Law Degrees | `formalEducationAndLawDegrees` | Undergraduate, `LL.B.`, `J.D.`, `LL.M.`, graduation years. |
-| **9** | Academic & Continuing Legal Education | `academicAndCleQualifications` | Lectureships, teaching roles, CLE compliance. |
-| **10** | Professional Accreditations | `professionalAccreditations` | Law Society Specialist Accreditations, NMAS Mediator, Notary. |
-| **11** | Courts of Admission | `courtsOfAdmission` | State Supreme Court, Federal Court, High Court of Australia. |
-| **12** | Judicial Appointments & Public Service | `judicialAndPublicService` | Judgeships, tribunal memberships, pro bono panels. |
-| **13** | Publications, Case Studies & Notable Matters | `publicationsAndNotableMatters` | Reported judgments, published legal papers, landmark trials. |
-| **14** | Fee Structure & Pricing | `feeStructure`, `hourlyRateAud`, `feeSummaryNotes` | `hourlyRateAud` strict whole integer in AUD. |
-| **15** | Languages Spoken | `languagesSpoken` | Array of consultation languages. |
-| **16** | Verified Contact Channels | `contactEmail`, `contactPhone`, `secureBookingOrPortalUrl` | **256-Bit AES-GCM Encrypted & Token-Gated** (released after token payment). |
-| **17** | Client Reviews & Reputation Metrics | `reputationAndDisciplinaryStanding`, `peerRecognitionsAndRankings` | Verified standing and peer rankings. |
-
-
----
-
 ### Domain 8: SuperAdmin Direct Inquiries & Refund Requests (`superadmin_messages`)
 *Ingestion Channel*: Direct Help & Support Channel (`/api/messages/superadmin`).  
 *Financial Invariant*: **Messages to SuperAdmin are ALWAYS FREE (Cost: 0 Tokens / $0.00 AUD).**  
@@ -609,6 +494,62 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 | **15** | Languages Spoken | `languagesSpoken` | Array of consultation languages. |
 | **16** | Verified Contact Channels | `contactEmail`, `contactPhone`, `secureBookingOrPortalUrl` | **256-Bit AES-GCM Encrypted & Token-Gated** (released after token payment). |
 | **17** | Client Reviews & Reputation Metrics | `reputationAndDisciplinaryStanding`, `peerRecognitionsAndRankings` | Verified standing and peer rankings. |
+
+---
+
+### Domain 15: AI Top 3 Matchmaker & Token-Gated Contact Release (`legal_matches`)
+*Ingestion Channel*: AI Matchmaker Client Form (`/api/ai/match-inquiry` or algorithmic fallback).
+*AI Agent Skill*: `.agents/skills/legal-matcher-17-pillar/SKILL.md` (compatible with `Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+*Token Monetization*: Cat 16 (Verified Direct Contact) is released only after the client spends platform tokens (controlled by SuperAdmin in `system_settings` / `products_and_services`, default: 1 token = $1 AUD).
+
+| Field Name | Type | Ingestion Channel | Classification | Invariants & Constraints | Storage & Lifecycle |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `matchScore` | Integer | 17-Pillar AI Evaluator | Match Rating | Strict whole integer between 70 and 99 (`Math.round`). | Ephemeral / Firestore match record |
+| `jurisdictionAndProximity` | Integer | Pillar A Evaluator | Score Breakdown | Max 25 points. Cat 1 (Location) + Cat 11 (Courts of Admission). | Nested `pillarBreakdown` |
+| `practiceExpertise` | Integer | Pillar B Evaluator | Score Breakdown | Max 35 points. Cat 2 (Practice Areas) + Cat 13 (Notable Matters) + Cat 10 (Accreditations). | Nested `pillarBreakdown` |
+| `seniorityAndStanding` | Integer | Pillar C Evaluator | Score Breakdown | Max 20 points. Cat 3 (Bar Admissions) + Cat 5 (Years of Practice) + Cat 8 (Degrees) + Cat 17 (Reviews). | Nested `pillarBreakdown` |
+| `commercialFit` | Integer | Pillar D Evaluator | Score Breakdown | Max 20 points. Cat 14 (Fee Structure) + Cat 15 (Languages) + Cat 4 (Firm Structure). | Nested `pillarBreakdown` |
+| `tokenUnlockCost` | Integer | SuperAdmin Catalog Config | Token Pricing | Strict integer (default 1 token = AUD $1). Controlled by SuperAdmin. | Client & Firestore |
+| `isContactUnlocked` | Boolean | Token Transaction Gate | Authorization State | Default: `false`. Becomes `true` upon spending required token(s). | LocalStorage & Firestore |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LegalMatchResultSchema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "practitionerId",
+    "fullName",
+    "matchScore",
+    "matchRationale",
+    "pillarBreakdown",
+    "tokenUnlockCost",
+    "isContactUnlocked"
+  ],
+  "properties": {
+    "practitionerId": { "type": "string" },
+    "fullName": { "type": "string" },
+    "matchScore": { "type": "integer", "minimum": 70, "maximum": 99 },
+    "matchRationale": { "type": "string" },
+    "pillarBreakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jurisdictionAndProximity", "practiceExpertise", "seniorityAndStanding", "commercialFit"],
+      "properties": {
+        "jurisdictionAndProximity": { "type": "integer", "minimum": 0, "maximum": 25 },
+        "practiceExpertise": { "type": "integer", "minimum": 0, "maximum": 35 },
+        "seniorityAndStanding": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "commercialFit": { "type": "integer", "minimum": 0, "maximum": 20 }
+      }
+    },
+    "highlightedNotableMatter": { "type": "string" },
+    "tokenUnlockCost": { "type": "integer", "minimum": 1 },
+    "isContactUnlocked": { "type": "boolean" }
+  }
+}
+```
+
 
 
 ---
@@ -888,6 +829,62 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 | **15** | Languages Spoken | `languagesSpoken` | Array of consultation languages. |
 | **16** | Verified Contact Channels | `contactEmail`, `contactPhone`, `secureBookingOrPortalUrl` | **256-Bit AES-GCM Encrypted & Token-Gated** (released after token payment). |
 | **17** | Client Reviews & Reputation Metrics | `reputationAndDisciplinaryStanding`, `peerRecognitionsAndRankings` | Verified standing and peer rankings. |
+
+---
+
+### Domain 15: AI Top 3 Matchmaker & Token-Gated Contact Release (`legal_matches`)
+*Ingestion Channel*: AI Matchmaker Client Form (`/api/ai/match-inquiry` or algorithmic fallback).
+*AI Agent Skill*: `.agents/skills/legal-matcher-17-pillar/SKILL.md` (compatible with `Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+*Token Monetization*: Cat 16 (Verified Direct Contact) is released only after the client spends platform tokens (controlled by SuperAdmin in `system_settings` / `products_and_services`, default: 1 token = $1 AUD).
+
+| Field Name | Type | Ingestion Channel | Classification | Invariants & Constraints | Storage & Lifecycle |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `matchScore` | Integer | 17-Pillar AI Evaluator | Match Rating | Strict whole integer between 70 and 99 (`Math.round`). | Ephemeral / Firestore match record |
+| `jurisdictionAndProximity` | Integer | Pillar A Evaluator | Score Breakdown | Max 25 points. Cat 1 (Location) + Cat 11 (Courts of Admission). | Nested `pillarBreakdown` |
+| `practiceExpertise` | Integer | Pillar B Evaluator | Score Breakdown | Max 35 points. Cat 2 (Practice Areas) + Cat 13 (Notable Matters) + Cat 10 (Accreditations). | Nested `pillarBreakdown` |
+| `seniorityAndStanding` | Integer | Pillar C Evaluator | Score Breakdown | Max 20 points. Cat 3 (Bar Admissions) + Cat 5 (Years of Practice) + Cat 8 (Degrees) + Cat 17 (Reviews). | Nested `pillarBreakdown` |
+| `commercialFit` | Integer | Pillar D Evaluator | Score Breakdown | Max 20 points. Cat 14 (Fee Structure) + Cat 15 (Languages) + Cat 4 (Firm Structure). | Nested `pillarBreakdown` |
+| `tokenUnlockCost` | Integer | SuperAdmin Catalog Config | Token Pricing | Strict integer (default 1 token = AUD $1). Controlled by SuperAdmin. | Client & Firestore |
+| `isContactUnlocked` | Boolean | Token Transaction Gate | Authorization State | Default: `false`. Becomes `true` upon spending required token(s). | LocalStorage & Firestore |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LegalMatchResultSchema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "practitionerId",
+    "fullName",
+    "matchScore",
+    "matchRationale",
+    "pillarBreakdown",
+    "tokenUnlockCost",
+    "isContactUnlocked"
+  ],
+  "properties": {
+    "practitionerId": { "type": "string" },
+    "fullName": { "type": "string" },
+    "matchScore": { "type": "integer", "minimum": 70, "maximum": 99 },
+    "matchRationale": { "type": "string" },
+    "pillarBreakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jurisdictionAndProximity", "practiceExpertise", "seniorityAndStanding", "commercialFit"],
+      "properties": {
+        "jurisdictionAndProximity": { "type": "integer", "minimum": 0, "maximum": 25 },
+        "practiceExpertise": { "type": "integer", "minimum": 0, "maximum": 35 },
+        "seniorityAndStanding": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "commercialFit": { "type": "integer", "minimum": 0, "maximum": 20 }
+      }
+    },
+    "highlightedNotableMatter": { "type": "string" },
+    "tokenUnlockCost": { "type": "integer", "minimum": 1 },
+    "isContactUnlocked": { "type": "boolean" }
+  }
+}
+```
+
 
 
 ---
@@ -1208,6 +1205,62 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 | **15** | Languages Spoken | `languagesSpoken` | Array of consultation languages. |
 | **16** | Verified Contact Channels | `contactEmail`, `contactPhone`, `secureBookingOrPortalUrl` | **256-Bit AES-GCM Encrypted & Token-Gated** (released after token payment). |
 | **17** | Client Reviews & Reputation Metrics | `reputationAndDisciplinaryStanding`, `peerRecognitionsAndRankings` | Verified standing and peer rankings. |
+
+---
+
+### Domain 15: AI Top 3 Matchmaker & Token-Gated Contact Release (`legal_matches`)
+*Ingestion Channel*: AI Matchmaker Client Form (`/api/ai/match-inquiry` or algorithmic fallback).
+*AI Agent Skill*: `.agents/skills/legal-matcher-17-pillar/SKILL.md` (compatible with `Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+*Token Monetization*: Cat 16 (Verified Direct Contact) is released only after the client spends platform tokens (controlled by SuperAdmin in `system_settings` / `products_and_services`, default: 1 token = $1 AUD).
+
+| Field Name | Type | Ingestion Channel | Classification | Invariants & Constraints | Storage & Lifecycle |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `matchScore` | Integer | 17-Pillar AI Evaluator | Match Rating | Strict whole integer between 70 and 99 (`Math.round`). | Ephemeral / Firestore match record |
+| `jurisdictionAndProximity` | Integer | Pillar A Evaluator | Score Breakdown | Max 25 points. Cat 1 (Location) + Cat 11 (Courts of Admission). | Nested `pillarBreakdown` |
+| `practiceExpertise` | Integer | Pillar B Evaluator | Score Breakdown | Max 35 points. Cat 2 (Practice Areas) + Cat 13 (Notable Matters) + Cat 10 (Accreditations). | Nested `pillarBreakdown` |
+| `seniorityAndStanding` | Integer | Pillar C Evaluator | Score Breakdown | Max 20 points. Cat 3 (Bar Admissions) + Cat 5 (Years of Practice) + Cat 8 (Degrees) + Cat 17 (Reviews). | Nested `pillarBreakdown` |
+| `commercialFit` | Integer | Pillar D Evaluator | Score Breakdown | Max 20 points. Cat 14 (Fee Structure) + Cat 15 (Languages) + Cat 4 (Firm Structure). | Nested `pillarBreakdown` |
+| `tokenUnlockCost` | Integer | SuperAdmin Catalog Config | Token Pricing | Strict integer (default 1 token = AUD $1). Controlled by SuperAdmin. | Client & Firestore |
+| `isContactUnlocked` | Boolean | Token Transaction Gate | Authorization State | Default: `false`. Becomes `true` upon spending required token(s). | LocalStorage & Firestore |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LegalMatchResultSchema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "practitionerId",
+    "fullName",
+    "matchScore",
+    "matchRationale",
+    "pillarBreakdown",
+    "tokenUnlockCost",
+    "isContactUnlocked"
+  ],
+  "properties": {
+    "practitionerId": { "type": "string" },
+    "fullName": { "type": "string" },
+    "matchScore": { "type": "integer", "minimum": 70, "maximum": 99 },
+    "matchRationale": { "type": "string" },
+    "pillarBreakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jurisdictionAndProximity", "practiceExpertise", "seniorityAndStanding", "commercialFit"],
+      "properties": {
+        "jurisdictionAndProximity": { "type": "integer", "minimum": 0, "maximum": 25 },
+        "practiceExpertise": { "type": "integer", "minimum": 0, "maximum": 35 },
+        "seniorityAndStanding": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "commercialFit": { "type": "integer", "minimum": 0, "maximum": 20 }
+      }
+    },
+    "highlightedNotableMatter": { "type": "string" },
+    "tokenUnlockCost": { "type": "integer", "minimum": 1 },
+    "isContactUnlocked": { "type": "boolean" }
+  }
+}
+```
+
 
 
 

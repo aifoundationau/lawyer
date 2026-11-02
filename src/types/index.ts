@@ -119,10 +119,21 @@ export interface ProfessionalProfileInput {
 /** AI-extracted suggestions. A field is left out when the text didn't state it. */
 export type ProfessionalProfileDraft = Partial<ProfessionalProfileInput>;
 
+export interface PillarScoringBreakdown {
+  jurisdictionAndProximity: number; // Max 25
+  practiceExpertise: number; // Max 35
+  seniorityAndStanding: number; // Max 20
+  commercialFit: number; // Max 20
+}
+
 export interface MatchedProfessionalResult {
   professional: LegalProfessional;
-  matchScore: number; // 0 - 100
+  matchScore: number; // Strict integer 70 - 99
   matchRationale: string;
+  pillarBreakdown?: PillarScoringBreakdown;
+  highlightedNotableMatter?: string;
+  tokenUnlockCost?: number; // Strict whole integer (default 1 token)
+  isContactUnlocked?: boolean;
 }
 
 export interface MatchResponse {

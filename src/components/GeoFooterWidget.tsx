@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { geoService, STATE_CAPITAL_COORDINATES, weatherCodeToLabel } from '../services/geoService';
 import { GeoLocationSettings, DateFormatOption, TimeFormatOption } from '../types';
-import { MapPin, Clock, Compass, Globe, Settings, Navigation, RefreshCw, X, Check, DollarSign } from './icons';
+import { MapPin, Clock, Compass, Globe, Settings, Navigation, RefreshCw, X, Check, DollarSign, User } from './icons';
+import { AboutDavidModal } from './AboutDavidModal';
 
 export const GeoFooterWidget: React.FC = () => {
   const [settings, setSettings] = useState<GeoLocationSettings>(geoService.getSettings());
   const [isOpen, setIsOpen] = useState(false);
+  const [isAboutDavidOpen, setIsAboutDavidOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>(geoService.formatTime());
   const [currentDate, setCurrentDate] = useState<string>(geoService.formatDate());
   const [isDetecting, setIsDetecting] = useState(false);
@@ -198,6 +200,34 @@ export const GeoFooterWidget: React.FC = () => {
           >
             <Settings size={12} />
             <span>Settings</span>
+          </button>
+
+          <button
+            type="button"
+            data-agent-id="geo-open-about-david-button"
+            data-testid="geo-open-about-david-btn"
+            aria-label="About David Robertson"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsAboutDavidOpen(true);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              background: 'rgba(56, 189, 248, 0.15)',
+              border: '1px solid rgba(56, 189, 248, 0.45)',
+              borderRadius: '999px',
+              padding: '2px 9px',
+              color: '#38bdf8',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            <User size={12} />
+            <span>About David</span>
           </button>
         </div>
       </aside>
@@ -764,6 +794,12 @@ export const GeoFooterWidget: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* About David Robertson Modal */}
+      <AboutDavidModal
+        isOpen={isAboutDavidOpen}
+        onClose={() => setIsAboutDavidOpen(false)}
+      />
     </>
   );
 };

@@ -211,7 +211,7 @@ function AppContent() {
           maxWidth: '1200px',
           margin: '0 auto',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           gap: '2rem',
           marginBottom: '2.5rem',
         }}>
@@ -258,6 +258,18 @@ function AppContent() {
                 <Sparkles size={14} style={{ color: '#60a5fa' }} />
                 <span>Gemini 3.8 Flash AI Model Routing</span>
               </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 style={{ color: '#fff', fontSize: '0.95rem', marginBottom: '0.75rem', fontWeight: 700 }}>
+              Founder & Leadership
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              <span style={{ color: '#fff', fontWeight: 600 }}>David Robertson</span>
+              <span>Founder, AI Foundation</span>
+              <span>MBA Digital Transformation • HDR Researcher</span>
+              <span style={{ color: 'var(--gold-light)', fontSize: '0.76rem' }}>Phnom Penh AI Centre</span>
             </div>
           </div>
         </div>

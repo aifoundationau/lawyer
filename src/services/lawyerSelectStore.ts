@@ -119,6 +119,20 @@ export const DEFAULT_PRODUCTS: ProductAndServiceItem[] = [
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
+  {
+    id: 'prod_profile_unlock',
+    tag: 'lawyerselect',
+    source: 'lawyerselect',
+    name: 'Top 3 Lawyer Direct Contact Unlock',
+    description: 'Unlock direct email, phone number, and priority booking URL for an AI-matched legal professional.',
+    category: 'custom',
+    tokenAmount: 1, // SuperAdmin controllable strict integer
+    priceAud: 1,
+    priceUsdEstimated: 0.655,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 export function detectDefaultUserRegion(): GeolocationRegionInfo {
@@ -158,6 +172,8 @@ class LawyerSelectStore {
   private userRegion: GeolocationRegionInfo = detectDefaultUserRegion();
   private lawFirms: LawFirmRegistration[] = [];
   private practitionerRegistrations: PractitionerRegistration[] = [];
+  private unlockedProfessionalIds: string[] = [];
+  private clientTokens: number = 25;
   private listeners: Array<() => void> = [];
 
   constructor() {
@@ -379,6 +395,24 @@ class LawyerSelectStore {
         this.practitionerRegistrations = JSON.parse(storedPracRegs);
       } catch {
         this.practitionerRegistrations = [];
+      }
+    }
+
+    // 11. Load Unlocked Profiles & Client Tokens
+    const storedUnlocked = localStorage.getItem('lawyerselect_unlocked_pros_v1');
+    if (storedUnlocked) {
+      try {
+        this.unlockedProfessionalIds = JSON.parse(storedUnlocked);
+      } catch {
+        this.unlockedProfessionalIds = [];
+      }
+    }
+    const storedTokens = localStorage.getItem('lawyerselect_client_tokens_v1');
+    if (storedTokens) {
+      try {
+        this.clientTokens = Math.max(0, Math.ceil(Number(storedTokens)));
+      } catch {
+        this.clientTokens = 25;
       }
     }
   }
@@ -1253,6 +1287,42 @@ class LawyerSelectStore {
     } catch {
       // Offline safe fallback
     }
+  }
+
+  public getClientTokens(): number {
+    return this.clientTokens;
+  }
+
+  public getProfileUnlockCost(): number {
+    const prod = this.products.find((p) => p.id === 'prod_profile_unlock');
+    return prod ? Math.ceil(prod.tokenAmount) : 1;
+  }
+
+  public isProfessionalContactUnlocked(proId: string): boolean {
+    return this.unlockedProfessionalIds.includes(proId);
+  }
+
+  public unlockProfessionalContact(proId: string): { success: boolean; message: string } {
+    if (this.unlockedProfessionalIds.includes(proId)) {
+      return { success: true, message: 'Contact channels already unlocked.' };
+    }
+    const cost = this.getProfileUnlockCost();
+    if (this.clientTokens < cost) {
+      return { success: false, message: `Insufficient tokens. Unlocking requires ${cost} token(s).` };
+    }
+    this.clientTokens = Math.max(0, this.clientTokens - cost);
+    this.unlockedProfessionalIds.push(proId);
+    localStorage.setItem('lawyerselect_unlocked_pros_v1', JSON.stringify(this.unlockedProfessionalIds));
+    localStorage.setItem('lawyerselect_client_tokens_v1', String(this.clientTokens));
+    this.notify();
+    return { success: true, message: `Contact unlocked successfully (-${cost} token).` };
+  }
+
+  public addClientTokens(amount: number): void {
+    const cleanAmount = Math.max(0, Math.ceil(amount));
+    this.clientTokens += cleanAmount;
+    localStorage.setItem('lawyerselect_client_tokens_v1', String(this.clientTokens));
+    this.notify();
   }
 }
 

@@ -1,15 +1,19 @@
 # Lawyer Select - Next Instructions & Worklist
 
 ## Current Status
-- Git Sync Complete: All local code, components, services, and tests committed and pushed to `https://github.com/aifoundationau/lawyer.git` (`origin/master`).
-- Lawyer Registration Portal (`Register` Tab):
-  - Renamed `"Legal Pro AI Intake"` to **`"Register"`** in `src/components/Navbar.tsx`.
-  - Step 1 (Google Supporter Gate): Explains one-box lawyer registration, 256-bit AES encryption, and token-gated contact release. Requires signing in with Google.
-  - Step 2 (Lawyer Application Form): Unlocks immediately after Google Sign-In. Extracts pasted CV/cases into all 17 categories, encrypts with 256-bit AES-GCM (`src/services/encryptionService.ts`), and stores in Firebase (`lawyer_applications` & `legal_professionals`).
-- AI Agent Skill: `.agents/skills/legal-practitioner-dossier-parser/SKILL.md` engineered for 100% deterministic reliability across all AI models (`Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
-- Firestore Security Rules: Verified and up to date for all collections including Domain 14 (`lawyer_applications/{appId}` with 256-bit AES-GCM checks). Validated via Firebase CLI with 0 errors.
-- Geolocation & Regional Settings Widget: `<GeoFooterWidget />` mounted at the bottom of `src/App.tsx` with live Open-Meteo weather and free daily AUD/USD currency converter.
-- Pinned Google Sign-In & SuperAdmin Authorization: Verified in top right of Navbar.
+- About David Robertson Added:
+  - Created `src/components/AboutDavidModal.tsx`: Displays portrait image, professional title (Founder of the AI Foundation • University Convenor & AI Specialist), academic & government qualifications (MBA Digital Transformation, Master's Applied Linguistics, TAE40110, HDR Researcher), full multi-decade career narrative (Australia, Japan, Southeast Asia / Phnom Penh AI Centre).
+  - Bottom Panel Integration (`src/components/GeoFooterWidget.tsx`): Pinned an **"About David"** pill button right on the thin bottom bar with user icon (`#38bdf8`), opening the responsive centered modal on click.
+  - Page Footer Integration (`src/App.tsx`): Added "Founder & Leadership" column showcasing David Robertson.
+- AI Matchmaker Top 3 (17 Specialist Categories & Token-Gated Contact Release):
+  - Skill: `.agents/skills/legal-matcher-17-pillar/SKILL.md` (compatible with `Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+  - Evaluates candidates across 4 scoring pillars (Jurisdiction & Proximity, Expertise & Precedents, Seniority & Standing, Commercial & Engagement Fit).
+  - Category 16 (Verified Direct Contact) token-gated (1 token = $1 AUD default, SuperAdmin controlled, price strictly on hover).
+- Lawyer Registration Portal (`Register` Tab): Verified with Google Supporter Gate and 256-bit AES-GCM encryption.
+- Geolocation & Regional Settings: Live on thin footer bar with Open-Meteo weather and free daily AUD/USD converter.
+- Firestore Security Rules: Validated with 0 errors across all domains.
+- Data Contracts: Up to date in `data-contracts.md` through Domain 15.
 
 ## Next Steps
-1. Verify live registration submission in the browser: sign in with Google, click "Load Sample 1", and submit the 256-bit encrypted lawyer application to confirm it saves to Firestore and appears in the Lawyer Directory.
+1. Copy David's portrait image into `public/images/david-robertson.jpg` and test clicking "About David" in the bottom panel of `http://localhost:3000/`.
+2. Commit and push all updates to GitHub (`git add . && git commit -m "feat: add About David Robertson modal and bottom panel trigger" && git push origin master`).

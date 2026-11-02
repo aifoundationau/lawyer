@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAnalytics, isSupported as isAnalyticsSupported, type Analytics } from 'firebase/analytics';
 import {
   initializeFirestore,
   getFirestore,
@@ -28,9 +29,10 @@ const firebaseConfig = {
   storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
   messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
   appId: env.VITE_FIREBASE_APP_ID || env.NEXT_PUBLIC_FIREBASE_APP_ID || (useEmulators ? 'demo-app-id' : ''),
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || 'G-9RX4ESGDEG',
 };
 
-const databaseId = env.VITE_FIRESTORE_DATABASE_ID || env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID || '(default)';
+const databaseId = env.VITE_FIRESTORE_DATABASE_ID || env.NEXT_PUBLIC_FIRESTORE_DATABASE_ID || 'lawyerselect';
 
 const required = useEmulators
   ? (['projectId'] as const)
@@ -45,9 +47,23 @@ export const firebaseConfigError: string | null = missing.length
 let app = undefined as unknown as FirebaseApp;
 let db = undefined as unknown as Firestore;
 let auth = undefined as unknown as Auth;
+let analytics = undefined as unknown as Analytics | null;
 
 if (!firebaseConfigError) {
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+  // Initialize Analytics when supported in browser environment
+  if (typeof window !== 'undefined') {
+    isAnalyticsSupported().then((supported) => {
+      if (supported) {
+        try {
+          analytics = getAnalytics(app);
+        } catch {
+          // Analytics non-blocking
+        }
+      }
+    });
+  }
 
   // Memory-only cache: confidential case details and chats are never written to the
   // browser's disk, so nothing is left behind on a shared or public computer.
@@ -77,6 +93,6 @@ if (!firebaseConfigError) {
   }
 }
 
-export { app, db, auth };
+export { app, db, auth, analytics };
 
 export const APP_TAG = 'lawyerselect';

@@ -8,15 +8,39 @@ rules_version = '2';
 // Firebase project, or a named database such as "lawyerselect". Never deploy it to the
 // shared ai-foundation-firebase default database: it would cut off every other app.
 //
-// Principles
+// Assumed Data Models (SSOT: data-contracts.md)
+// -------------------------------------------------------------------------------------
+// 1. legal_professionals/{proId}:
+//    - Public profiles for active, verified practitioners. Private subcollection for contact info.
+// 2. marketplace_cases/{caseId}:
+//    - Anonymous summaries for verified lawyers. Private dossier subcollection for purchaser/client.
+// 3. case_purchases/{purchaseId}:
+//    - Lead unlock receipts ($20 AUD / 20 tokens), readable only by the purchasing lawyer.
+// 4. client_matches/{matchId}:
+//    - AI match records, readable only by the inquiring client.
+// 5. chat_interactions/{chatId} & messages/{messageId}:
+//    - 1-on-1 direct messaging between authenticated client and verified practitioner.
+// 6. system_settings/{docId}:
+//    - Global platform settings (currency, token pricing, disclaimers). Public read; server write only.
+// 7. products_and_services/{productId}:
+//    - Product and services catalog. Public read; server write only.
+// 8. superadmin_messages/{messageId}:
+//    - Direct inquiries and refund requests. Free of charge (0 tokens, 0 AUD).
+//      Readable by sender and superadmin. Creatable by sender. Closed to client update/delete.
+// 9. law_firms/{firmId}:
+//    - Law firm entity registration (Domain 10). Public read for approved firms (status == 'approved').
+//      Owner or superadmin read for unapproved. Creation by signed-in users. Update/delete by superadmin only.
+// 10. practitioner_registrations/{regId}:
+//     - Individual practitioner KYC and regulatory profile (Domain 11). Private read for owner/superadmin.
+//       Creation by signed-in users. Update/delete by superadmin only.
+//
+// Principles:
 //  - Deny by default: anything not allowed below is refused.
 //  - Money, practitioner verification and published case text are written only by the
 //    server (Admin SDK in /api), which is not subject to these rules.
 //  - Confidential client details live in a separate "private/dossier" document that only
 //    the client who posted the case and the one practitioner who paid for it can read.
 //  - Chat messages must come from the signed-in participant they claim to be from.
-//
-// Tested by tests/rules/firestore.rules.test.ts (npm run test:rules).
 // =====================================================================================
 
 service cloud.firestore {
@@ -33,6 +57,16 @@ service cloud.firestore {
     // Email/password accounts must confirm their email address; Google accounts already have.
     function verifiedEmail() {
       return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    // SuperAdmin check: verifies trusted auth token custom claims or verified bootstrap email.
+    function isSuperAdmin() {
+      return signedIn() && (
+        ('admin' in request.auth.token && request.auth.token.admin == true)
+        || ('superadmin' in request.auth.token && request.auth.token.superadmin == true)
+        || ('role' in request.auth.token && request.auth.token.role == 'superadmin')
+        || (verifiedEmail() && 'email' in request.auth.token && request.auth.token.email in ['admin@lawyerselect.com.au', 'superadmin@lawyerselect.com.au'])
+      );
     }
 
     function professionalPath(id) {
@@ -190,6 +224,131 @@ service cloud.firestore {
           && request.resource.data.read == true;
         allow delete: if false;
       }
+    }
+
+    // ---------------------------------------------------------------- System Configuration
+    match /system_settings/{docId} {
+      // Public read for all users (signed-in or anonymous/guest) so the app can load currency, tokens, and disclaimers.
+      allow read: if true;
+      // Deny writes by default for client apps; modified only by server Admin SDK.
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------- Products & Services Catalog
+    match /products_and_services/{productId} {
+      // Public read for all users so the catalog can be displayed.
+      allow read: if true;
+      // Deny writes by default for client apps; modified only by server Admin SDK.
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------- SuperAdmin Messages & Support
+    function validSuperAdminMessage(messageId, d) {
+      let allowedKeys = [
+        'id', 'tag', 'source', 'senderId', 'senderEmail', 'senderName',
+        'senderRole', 'recipientRole', 'messageType', 'subject', 'body',
+        'costTokens', 'costAud', 'status', 'createdAt', 'updatedAt',
+        'adminResponse', 'adminRespondedAt'
+      ];
+      let requiredKeys = [
+        'id', 'tag', 'senderId', 'senderEmail', 'senderName',
+        'senderRole', 'recipientRole', 'messageType', 'subject', 'body',
+        'costTokens', 'costAud', 'status'
+      ];
+      return d.keys().hasAll(requiredKeys) && d.keys().hasOnly(allowedKeys)
+        && d.id == messageId
+        && d.tag == 'lawyerselect'
+        && (!('source' in d) || d.source == 'lawyerselect')
+        && d.senderId == uid()
+        && d.recipientRole == 'superadmin'
+        && d.costTokens == 0
+        && d.costAud == 0
+        && d.status == 'pending'
+        && d.senderName is string && d.senderName.size() >= 2 && d.senderName.size() <= 100
+        && d.senderEmail is string && d.senderEmail.size() >= 3 && d.senderEmail.size() <= 150
+        && d.senderRole in ['client', 'lawyer', 'guest']
+        && d.messageType in ['refund_request', 'general_inquiry', 'support', 'dispute']
+        && d.subject is string && d.subject.size() >= 3 && d.subject.size() <= 200
+        && d.body is string && d.body.size() >= 5 && d.body.size() <= 5000
+        && (!('createdAt' in d) || (d.createdAt is string && d.createdAt.size() <= 50) || d.createdAt is timestamp)
+        && (!('updatedAt' in d) || (d.updatedAt is string && d.updatedAt.size() <= 50) || d.updatedAt is timestamp);
+    }
+
+    match /superadmin_messages/{messageId} {
+      // Read allowed if signed-in and the user is either the message author or a superadmin.
+      allow read: if signedIn() && (resource.data.senderId == uid() || isSuperAdmin());
+
+      // Create allowed for authenticated users submitting a zero-cost inquiry to superadmin.
+      allow create: if signedIn()
+        && request.resource.data.senderId == uid()
+        && request.resource.data.tag == 'lawyerselect'
+        && request.resource.data.costTokens == 0
+        && request.resource.data.costAud == 0
+        && request.resource.data.status == 'pending'
+        && request.resource.data.recipientRole == 'superadmin'
+        && validSuperAdminMessage(messageId, request.resource.data);
+
+      // Updates and deletes are disallowed for client apps (admin replies and status transitions are handled via server / Admin SDK).
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------- Law Firms (Domain 10)
+    function validNewLawFirm(firmId, d) {
+      return d.id == firmId
+        && d.tag == 'lawyerselect'
+        && (!('source' in d) || d.source == 'lawyerselect')
+        && d.registrationType == 'law_firm'
+        && d.status in ['approved', 'pending_review']
+        && ('legalEntity' in d && d.legalEntity is map)
+        && (!('ownerId' in d) || (d.ownerId is string && d.ownerId.size() <= 128));
+    }
+
+    match /law_firms/{firmId} {
+      // Public read for approved law firms; pending or suspended firms readable by owner or superadmin.
+      allow read: if resource.data.status == 'approved'
+        || (signedIn() && (isSuperAdmin() || ('ownerId' in resource.data && resource.data.ownerId == uid())));
+
+      // Creation allowed for signed-in users with required domain partition tags.
+      allow create: if signedIn()
+        && request.resource.data.tag == 'lawyerselect'
+        && request.resource.data.registrationType == 'law_firm'
+        && request.resource.data.id == firmId
+        && validNewLawFirm(firmId, request.resource.data);
+
+      // Updates and deletions restricted to superadmins.
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // ---------------------------------------------------------------- Practitioner Registrations (Domain 11)
+    function validNewPractitionerRegistration(regId, d) {
+      return d.id == regId
+        && d.tag == 'lawyerselect'
+        && (!('source' in d) || d.source == 'lawyerselect')
+        && d.registrationType == 'individual_practitioner'
+        && d.status in ['approved', 'pending_review']
+        && ('practitionerProfile' in d && d.practitionerProfile is map)
+        && (!('ownerId' in d) || (d.ownerId is string && d.ownerId.size() <= 128));
+    }
+
+    match /practitioner_registrations/{regId} {
+      // Sensitive KYC/PII data: read restricted to document owner or superadmin.
+      allow read: if signedIn()
+        && (isSuperAdmin()
+            || ('ownerId' in resource.data && resource.data.ownerId == uid())
+            || ('registeredByUid' in resource.data && resource.data.registeredByUid == uid())
+            || ('practitionerProfile' in resource.data && 'userId' in resource.data.practitionerProfile && resource.data.practitionerProfile.userId == uid())
+            || uid() == regId);
+
+      // Creation allowed for signed-in users with required domain partition tags.
+      allow create: if signedIn()
+        && request.resource.data.tag == 'lawyerselect'
+        && request.resource.data.registrationType == 'individual_practitioner'
+        && request.resource.data.id == regId
+        && validNewPractitionerRegistration(regId, request.resource.data);
+
+      // Updates and deletions restricted to superadmins.
+      allow update, delete: if isSuperAdmin();
     }
   }
 }

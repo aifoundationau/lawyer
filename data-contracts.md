@@ -175,3 +175,579 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
    - No data is shared with unauthenticated third parties or used for external model training.
 3. **PCI DSS Compliance (SAQ A)**:
    - Hosted Stripe Checkout sessions minimize PCI scope. No cardholder PAN or CVV is transmitted through Lawyer Select servers.
+
+---
+
+## 4. Multi-Currency, Geolocation & Token Economy Contracts
+
+### Domain 6: System Configuration, Currency & Geolocation (`system_settings`)
+*Ingestion Channel*: SuperAdmin Control Panel (`/api/admin/settings`).  
+*Partition Key*: `tag: 'lawyerselect'`. Document ID: `system_settings/global_config`.
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SystemSettingsSchema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "tag",
+    "source",
+    "defaultCurrency",
+    "defaultTokenPriceAud",
+    "roundingPolicy",
+    "audToUsdExchangeRate",
+    "isTokenSystemEnabled",
+    "isAudEnabled",
+    "isUsdEnabled",
+    "geoDetectionEnabled",
+    "auNzRegionCodes",
+    "invoiceDisclaimer",
+    "updatedAt",
+    "updatedByUid"
+  ],
+  "properties": {
+    "id": { "type": "string", "enum": ["global_config"] },
+    "tag": { "type": "string", "enum": ["lawyerselect"] },
+    "source": { "type": "string", "enum": ["lawyerselect"] },
+    "defaultCurrency": { "type": "string", "enum": ["AUD"] },
+    "defaultTokenPriceAud": { 
+      "type": "integer", 
+      "minimum": 1, 
+      "maximum": 1,
+      "description": "Default price for 1 token is fixed strictly at AUD $1. Whole number only." 
+    },
+    "roundingPolicy": { 
+      "type": "string", 
+      "enum": ["CEIL_WHOLE_NUMBERS"], 
+      "description": "Strict whole numbers only. Math.ceil is applied to round up all calculations. Zero decimals permitted for token balances or final charges." 
+    },
+    "audToUsdExchangeRate": { 
+      "type": "number", 
+      "minimum": 0.001, 
+      "maximum": 10.0,
+      "description": "Conversion rate from AUD to USD. Display formatting restricted to a maximum of 3 decimal places (e.g. 0.655)." 
+    },
+    "isTokenSystemEnabled": { "type": "boolean" },
+    "isAudEnabled": { "type": "boolean" },
+    "isUsdEnabled": { "type": "boolean" },
+    "geoDetectionEnabled": { "type": "boolean" },
+    "auNzRegionCodes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of country codes designating Australia and New Zealand (e.g. ['AU', 'NZ', 'AUS', 'NZL'])."
+    },
+    "invoiceDisclaimer": {
+      "type": "string",
+      "enum": ["All invoices and receipts are issued strictly in Australian Dollars (AUD)."]
+    },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "updatedByUid": { "type": "string" }
+  }
+}
+```
+
+---
+
+### Domain 7: Products & Services Catalog (`products_and_services`)
+*Ingestion Channels*: SuperAdmin Item CRUD (`/api/admin/products`).  
+*Description*: All items, lead types, and platform features sold on Lawyer Select. SuperAdmin sets the token amount for every product/service.
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProductAndServiceItemSchema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "tag",
+    "source",
+    "name",
+    "description",
+    "category",
+    "tokenAmount",
+    "priceAud",
+    "priceUsdEstimated",
+    "isActive",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^prod_[a-zA-Z0-9_-]+$" },
+    "tag": { "type": "string", "enum": ["lawyerselect"] },
+    "source": { "type": "string", "enum": ["lawyerselect"] },
+    "name": { "type": "string", "minLength": 3, "maxLength": 120 },
+    "description": { "type": "string", "minLength": 5, "maxLength": 1000 },
+    "category": { 
+      "type": "string", 
+      "enum": [
+        "lead_unlock",
+        "practitioner_subscription",
+        "intake_triage",
+        "document_summary",
+        "consultation_deposit",
+        "custom"
+      ] 
+    },
+    "tokenAmount": { 
+      "type": "integer", 
+      "minimum": 1,
+      "description": "Strict whole integer token cost. Set by SuperAdmin. Decimals strictly forbidden." 
+    },
+    "priceAud": { 
+      "type": "integer", 
+      "minimum": 1,
+      "description": "Strict whole integer in AUD ($1 AUD per 1 token). Decimals strictly forbidden." 
+    },
+    "priceUsdEstimated": { 
+      "type": "number", 
+      "minimum": 0.001,
+      "description": "Calculated as priceAud * audToUsdExchangeRate. Displayed strictly on hover or outside AU/NZ with max 3 decimal places." 
+    },
+    "isActive": { "type": "boolean" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}
+```
+
+---
+
+### Domain 8: SuperAdmin Direct Inquiries & Refund Requests (`superadmin_messages`)
+*Ingestion Channel*: Direct Help & Support Channel (`/api/messages/superadmin`).  
+*Financial Invariant*: **Messages to SuperAdmin are ALWAYS FREE (Cost: 0 Tokens / $0.00 AUD).**  
+*Regulatory & Policy Rule*: Refund requests must be made in writing by sending a message directly to the SuperAdmin.
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SuperAdminMessageSchema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "tag",
+    "source",
+    "senderId",
+    "senderEmail",
+    "senderName",
+    "senderRole",
+    "recipientRole",
+    "messageType",
+    "subject",
+    "body",
+    "costTokens",
+    "costAud",
+    "status",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^sam_[a-zA-Z0-9_-]+$" },
+    "tag": { "type": "string", "enum": ["lawyerselect"] },
+    "source": { "type": "string", "enum": ["lawyerselect"] },
+    "senderId": { "type": "string" },
+    "senderEmail": { "type": "string", "format": "email" },
+    "senderName": { "type": "string", "minLength": 2, "maxLength": 100 },
+    "senderRole": { "type": "string", "enum": ["client", "lawyer", "guest"] },
+    "recipientRole": { "type": "string", "enum": ["superadmin"] },
+    "messageType": { 
+      "type": "string", 
+      "enum": ["refund_request", "general_inquiry", "support", "dispute"] 
+    },
+    "subject": { "type": "string", "minLength": 3, "maxLength": 200 },
+    "body": { "type": "string", "minLength": 10, "maxLength": 5000 },
+    "costTokens": { 
+      "type": "integer", 
+      "enum": [0],
+      "description": "Messages to superadmin are strictly free of charge." 
+    },
+    "costAud": { 
+      "type": "integer", 
+      "enum": [0],
+      "description": "Strictly 0 AUD." 
+    },
+    "status": { 
+      "type": "string", 
+      "enum": ["pending", "under_review", "approved", "rejected", "closed"] 
+    },
+    "adminResponse": { "type": "string" },
+    "adminRespondedAt": { "type": "string", "format": "date-time" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}
+```
+
+---
+
+### Domain 9: Terms of Service & Token Economy Disclaimers Contract
+1. **Token Invariant & Mechanics Definition**:
+   - "You exchange money for a token. Tokens provide more flexible payment options across the platform, as a single payment or matter may be distributed to multiple legal service providers, barristers, conveyancers, and specialist consultants."
+   - Default exchange valuation: **1 Token = AUD $1.00**.
+2. **Whole Number & Rounding Policy**:
+   - Zero decimal policy: All token amounts and platform transactions must be whole numbers.
+   - Any fractional calculation is strictly rounded UP (`Math.ceil`) to the nearest integer.
+3. **Multi-Currency & Geolocation Display**:
+   - System defaults to **Australian Dollars (AUD)** for all users and transactions.
+   - Geolocation automatically detects user's physical region.
+   - Users within **Australia or New Zealand** see native AUD pricing and whole-number token values.
+   - Users **outside Australia and New Zealand** see converted **USD** pricing alongside whole-number tokens.
+   - AUD to USD conversion calculations display a maximum of **3 decimal places** (e.g. `US$ 0.655`).
+4. **Mandatory Invoicing Disclaimer**:
+   - "All tax invoices, billing summaries, and receipts are denominated strictly in Australian Dollars (AUD)."
+5. **Refund Request Protocol**:
+   - In accordance with Lawyer Select Terms of Service, all refund requests must be submitted in writing by sending a message directly to the SuperAdmin via the platform support desk.
+   - Messages to the SuperAdmin are **always free** and incur zero tokens.
+
+---
+
+## 5. Dual Registration Architecture & AI Approved Information Sheet Contracts
+
+### Domain 10: Law Firm & Legal Entity Registration (`law_firms`)
+*Ingestion Channels*: AI One-Blob Intake Engine (`/api/ai` -> `extractFirmInformationSheet`), Law Firm Registration Form UI.  
+*Partition Key*: `tag: 'lawyerselect'`, `source: 'lawyerselect'`.
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LawFirmRegistrationSchema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "tag",
+    "source",
+    "registrationType",
+    "legalEntity",
+    "complianceAndInsurance",
+    "operationalCapabilities",
+    "approvedSheetMeta",
+    "status",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^firm_[a-zA-Z0-9_-]+$" },
+    "tag": { "type": "string", "enum": ["lawyerselect"] },
+    "source": { "type": "string", "enum": ["lawyerselect"] },
+    "registrationType": { "type": "string", "enum": ["law_firm"] },
+    "legalEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legalBusinessName",
+        "tradingNames",
+        "entityIdentifierType",
+        "entityIdentifierNumber",
+        "practiceType",
+        "firmRegulatoryNumber",
+        "principalAddress",
+        "mailingAddress",
+        "branchOfficeLocations",
+        "dxBoxDetails",
+        "firmEmail",
+        "firmTelephone",
+        "secureClientIntakeEndpoint",
+        "officialWebsiteUrl"
+      ],
+      "properties": {
+        "legalBusinessName": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "tradingNames": { "type": "array", "items": { "type": "string" } },
+        "entityIdentifierType": {
+          "type": "string",
+          "enum": ["ABN/ACN (Australia)", "EIN (US)", "Companies House CRN (UK)", "NZBN (New Zealand)", "Other"]
+        },
+        "entityIdentifierNumber": { "type": "string", "minLength": 3, "maxLength": 60 },
+        "practiceType": {
+          "type": "string",
+          "enum": [
+            "Sole Practitioner",
+            "Partnership",
+            "Incorporated Legal Practice (ILP)",
+            "Multi-Disciplinary Partnership (MDP)",
+            "Barristers Chambers"
+          ]
+        },
+        "firmRegulatoryNumber": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "principalAddress": { "type": "string", "minLength": 5, "maxLength": 300 },
+        "mailingAddress": { "type": "string", "maxLength": 300 },
+        "branchOfficeLocations": { "type": "array", "items": { "type": "string" } },
+        "dxBoxDetails": { "type": "string", "maxLength": 100 },
+        "firmEmail": { "type": "string", "format": "email" },
+        "firmTelephone": { "type": "string", "minLength": 5, "maxLength": 40 },
+        "secureClientIntakeEndpoint": { "type": "string", "maxLength": 250 },
+        "officialWebsiteUrl": { "type": "string", "maxLength": 250 }
+      }
+    },
+    "complianceAndInsurance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "insurerOrSchemeName",
+        "policyNumber",
+        "currencyOfCoverCertificate",
+        "policyExpirationDate",
+        "isGoodStandingConfirmed",
+        "regulatoryRegisterStatus",
+        "disciplinaryDisclosureNotes"
+      ],
+      "properties": {
+        "insurerOrSchemeName": { "type": "string", "minLength": 2, "maxLength": 150 },
+        "policyNumber": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "currencyOfCoverCertificate": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "policyExpirationDate": { "type": "string" },
+        "isGoodStandingConfirmed": { "type": "boolean" },
+        "regulatoryRegisterStatus": {
+          "type": "string",
+          "enum": ["Clean & Active Standing", "Subject to Undertaking / Condition", "Pending Registry Check"]
+        },
+        "disciplinaryDisclosureNotes": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "operationalCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primaryPracticeAreas",
+        "secondaryPracticeAreas",
+        "accreditationsAndSpecialisations",
+        "jurisdictionsAdmitted",
+        "courtAndRegistryIdentifiers",
+        "languagesSpoken"
+      ],
+      "properties": {
+        "primaryPracticeAreas": { "type": "array", "items": { "type": "string" } },
+        "secondaryPracticeAreas": { "type": "array", "items": { "type": "string" } },
+        "accreditationsAndSpecialisations": { "type": "array", "items": { "type": "string" } },
+        "jurisdictionsAdmitted": { "type": "array", "items": { "type": "string" } },
+        "courtAndRegistryIdentifiers": { "type": "array", "items": { "type": "string" } },
+        "languagesSpoken": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "approvedSheetMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sheetId", "aiConfidenceScore", "executiveSummary", "generatedAt"],
+      "properties": {
+        "sheetId": { "type": "string" },
+        "aiConfidenceScore": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "executiveSummary": { "type": "string" },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "status": { "type": "string", "enum": ["approved", "pending_review", "suspended"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}
+```
+
+---
+
+### Domain 11: Individual Practitioner Registration & KYC Profile (`practitioner_registrations`)
+*Ingestion Channels*: AI One-Blob Intake Engine (`/api/ai` -> `extractPractitionerInformationSheet`), Individual Lawyer Registration Form UI.  
+*Partition Key*: `tag: 'lawyerselect'`, `source: 'lawyerselect'`.
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PractitionerRegistrationSchema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "tag",
+    "source",
+    "registrationType",
+    "practitionerProfile",
+    "complianceAndInsurance",
+    "operationalCapabilities",
+    "approvedSheetMeta",
+    "status",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^preg_[a-zA-Z0-9_-]+$" },
+    "tag": { "type": "string", "enum": ["lawyerselect"] },
+    "source": { "type": "string", "enum": ["lawyerselect"] },
+    "registrationType": { "type": "string", "enum": ["individual_practitioner"] },
+    "practitionerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prefix",
+        "fullLegalName",
+        "preferredName",
+        "postNominals",
+        "title",
+        "roleOrPosition",
+        "affiliatedFirmName",
+        "email",
+        "phone",
+        "locationCity",
+        "locationPostcode",
+        "yearsOfExperience",
+        "feeStructure",
+        "hourlyRateAud",
+        "practisingCertificate",
+        "identityVerificationKyc"
+      ],
+      "properties": {
+        "prefix": { "type": "string" },
+        "fullLegalName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "preferredName": { "type": "string", "maxLength": 80 },
+        "postNominals": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string" },
+        "roleOrPosition": {
+          "type": "string",
+          "enum": [
+            "Partner",
+            "Principal",
+            "Senior Associate",
+            "Associate",
+            "Special Counsel",
+            "Consultant",
+            "Barrister",
+            "Sole Practitioner"
+          ]
+        },
+        "affiliatedFirmName": { "type": "string", "maxLength": 200 },
+        "affiliatedFirmId": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "locationCity": { "type": "string" },
+        "locationPostcode": { "type": "string" },
+        "yearsOfExperience": { "type": "integer", "minimum": 0, "maximum": 75 },
+        "feeStructure": { "type": "string" },
+        "hourlyRateAud": { "type": "integer", "minimum": 0 },
+        "practisingCertificate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pcNumber",
+            "licensingAuthority",
+            "certificateCategory",
+            "admissionDate",
+            "admissionJurisdiction",
+            "pcExpirationDate"
+          ],
+          "properties": {
+            "pcNumber": { "type": "string", "minLength": 2, "maxLength": 80 },
+            "licensingAuthority": { "type": "string", "minLength": 2, "maxLength": 150 },
+            "certificateCategory": {
+              "type": "string",
+              "enum": [
+                "Principal (Unrestricted)",
+                "Employee Solicitor",
+                "Corporate Practising Certificate",
+                "Barrister Practising Certificate",
+                "Unrestricted Practising Certificate",
+                "Restricted (Supervised)",
+                "Registered Migration Agent (MARA)",
+                "Licensed Conveyancer"
+              ]
+            },
+            "admissionDate": { "type": "string" },
+            "admissionJurisdiction": { "type": "string" },
+            "pcExpirationDate": { "type": "string" }
+          }
+        },
+        "identityVerificationKyc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "documentType",
+            "issuingAuthority",
+            "documentReference",
+            "expirationDate",
+            "forensicBriefDescription",
+            "verificationStatus"
+          ],
+          "properties": {
+            "documentType": {
+              "type": "string",
+              "enum": ["Australian Passport", "International Passport", "State Driver Licence", "Government Photo ID"]
+            },
+            "issuingAuthority": { "type": "string" },
+            "documentReference": { "type": "string" },
+            "expirationDate": { "type": "string" },
+            "forensicBriefDescription": {
+              "type": "string",
+              "description": "Follows personal-id-inspection skill standard: [Document Class & Series] belonging to [Identified Full Name], issued by [Issuing Authority] ([Country]). [Validity status / Expiration date] with [Security feature confirmation]."
+            },
+            "verificationStatus": {
+              "type": "string",
+              "enum": ["Verified Authentic", "Pending Manual Review", "Flagged"]
+            }
+          }
+        }
+      }
+    },
+    "complianceAndInsurance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "insurerOrSchemeName",
+        "policyNumber",
+        "currencyOfCoverCertificate",
+        "policyExpirationDate",
+        "isGoodStandingConfirmed",
+        "regulatoryRegisterStatus",
+        "disciplinaryDisclosureNotes"
+      ],
+      "properties": {
+        "insurerOrSchemeName": { "type": "string" },
+        "policyNumber": { "type": "string" },
+        "currencyOfCoverCertificate": { "type": "string" },
+        "policyExpirationDate": { "type": "string" },
+        "isGoodStandingConfirmed": { "type": "boolean" },
+        "regulatoryRegisterStatus": {
+          "type": "string",
+          "enum": ["Clean & Active Standing", "Subject to Undertaking / Condition", "Pending Registry Check"]
+        },
+        "disciplinaryDisclosureNotes": { "type": "string" }
+      }
+    },
+    "operationalCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primaryPracticeAreas",
+        "secondaryPracticeAreas",
+        "accreditationsAndSpecialisations",
+        "jurisdictionsAdmitted",
+        "courtAndRegistryIdentifiers",
+        "languagesSpoken"
+      ],
+      "properties": {
+        "primaryPracticeAreas": { "type": "array", "items": { "type": "string" } },
+        "secondaryPracticeAreas": { "type": "array", "items": { "type": "string" } },
+        "accreditationsAndSpecialisations": { "type": "array", "items": { "type": "string" } },
+        "jurisdictionsAdmitted": { "type": "array", "items": { "type": "string" } },
+        "courtAndRegistryIdentifiers": { "type": "array", "items": { "type": "string" } },
+        "languagesSpoken": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "approvedSheetMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sheetId", "aiConfidenceScore", "executiveSummary", "generatedAt"],
+      "properties": {
+        "sheetId": { "type": "string" },
+        "aiConfidenceScore": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "executiveSummary": { "type": "string" },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "status": { "type": "string", "enum": ["approved", "pending_review", "suspended"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}
+```
+
+

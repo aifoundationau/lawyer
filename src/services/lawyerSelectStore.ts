@@ -1,4 +1,18 @@
-import { LegalProfessional, MarketplaceCase, ChatInteraction, ChatMessage, CasePurchase, CaseConfidentialDossier } from '../types';
+import {
+  LegalProfessional,
+  MarketplaceCase,
+  ChatInteraction,
+  ChatMessage,
+  CasePurchase,
+  CaseConfidentialDossier,
+  SystemSettings,
+  ProductAndServiceItem,
+  SuperAdminMessage,
+  SuperAdminMessageType,
+  GeolocationRegionInfo,
+  LawFirmRegistration,
+  PractitionerRegistration
+} from '../types';
 import { SEED_LEGAL_PROFESSIONALS } from '../data/seedLawyers';
 import { SEED_MARKETPLACE_CASES, SEED_CONFIDENTIAL_DOSSIERS } from '../data/seedCases';
 import { db } from '../config/firebase';
@@ -9,6 +23,127 @@ const STORAGE_KEY_CASES = 'lawyerselect_cases_v1';
 const STORAGE_KEY_DOSSIERS = 'lawyerselect_dossiers_vault_v1';
 const STORAGE_KEY_CHATS = 'lawyerselect_chats_v1';
 const STORAGE_KEY_PURCHASES = 'lawyerselect_purchases_v1';
+const STORAGE_KEY_SETTINGS = 'lawyerselect_settings_v1';
+const STORAGE_KEY_PRODUCTS = 'lawyerselect_products_v1';
+const STORAGE_KEY_SA_MSGS = 'lawyerselect_superadmin_messages_v1';
+const STORAGE_KEY_USER_REGION = 'lawyerselect_user_region_v1';
+const STORAGE_KEY_FIRMS = 'lawyerselect_law_firms_v1';
+const STORAGE_KEY_PRAC_REGS = 'lawyerselect_practitioner_regs_v1';
+
+export const DEFAULT_SETTINGS: SystemSettings = {
+  id: 'global_config',
+  tag: 'lawyerselect',
+  source: 'lawyerselect',
+  defaultCurrency: 'AUD',
+  defaultTokenPriceAud: 1, // 1 Token = AUD $1
+  roundingPolicy: 'CEIL_WHOLE_NUMBERS', // Math.ceil strictly whole numbers
+  audToUsdExchangeRate: 0.655, // Max 3 decimal places
+  isTokenSystemEnabled: true,
+  isAudEnabled: true,
+  isUsdEnabled: true,
+  geoDetectionEnabled: true,
+  auNzRegionCodes: ['AU', 'NZ', 'AUS', 'NZL'],
+  invoiceDisclaimer: 'All invoices and receipts are issued strictly in Australian Dollars (AUD).',
+  updatedAt: new Date().toISOString(),
+};
+
+export const DEFAULT_PRODUCTS: ProductAndServiceItem[] = [
+  {
+    id: 'prod_lead_unlock',
+    tag: 'lawyerselect',
+    source: 'lawyerselect',
+    name: 'Marketplace Legal Case Lead Unlock',
+    description: 'Unlock direct client contact info and confidential factual dossier for an active matter.',
+    category: 'lead_unlock',
+    tokenAmount: 20, // 20 tokens = AUD $20
+    priceAud: 20,
+    priceUsdEstimated: 13.1,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod_intake_triage',
+    tag: 'lawyerselect',
+    source: 'lawyerselect',
+    name: 'Urgent 24h AI Case Triage & Specialist Broadcast',
+    description: 'Expedite legal intake review and broadcast matter to accredited top specialists within 24 hours.',
+    category: 'intake_triage',
+    tokenAmount: 15, // 15 tokens = AUD $15
+    priceAud: 15,
+    priceUsdEstimated: 9.825,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod_pro_verification',
+    tag: 'lawyerselect',
+    source: 'lawyerselect',
+    name: 'Practitioner Gold Verification Badge (Monthly)',
+    description: 'Verified regulatory badge, prioritized AI match scoring, and top placement in Australian directory.',
+    category: 'practitioner_subscription',
+    tokenAmount: 50, // 50 tokens = AUD $50
+    priceAud: 50,
+    priceUsdEstimated: 32.75,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod_doc_summary',
+    tag: 'lawyerselect',
+    source: 'lawyerselect',
+    name: 'AI Document Pre-Screening & Case Brief',
+    description: 'Automated synthesis and executive legal brief generated from client supporting documents.',
+    category: 'document_summary',
+    tokenAmount: 10, // 10 tokens = AUD $10
+    priceAud: 10,
+    priceUsdEstimated: 6.55,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'prod_consult_deposit',
+    tag: 'lawyerselect',
+    source: 'lawyerselect',
+    name: 'Direct Practitioner Initial Consultation Escrow Deposit',
+    description: 'Secure initial consultation retainer held in escrow for lawyer-client conference.',
+    category: 'consultation_deposit',
+    tokenAmount: 40, // 40 tokens = AUD $40
+    priceAud: 40,
+    priceUsdEstimated: 26.2,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+export function detectDefaultUserRegion(): GeolocationRegionInfo {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const isAuOrNz = tz.startsWith('Australia/') || tz.startsWith('Pacific/Auckland') || tz.startsWith('Pacific/Chatham');
+    const city = isAuOrNz
+      ? (tz.startsWith('Australia/') ? tz.replace('Australia/', '').replace('_', ' ') : 'Auckland')
+      : 'International';
+    return {
+      countryCode: isAuOrNz ? (tz.startsWith('Pacific/') ? 'NZ' : 'AU') : 'US',
+      countryName: isAuOrNz ? (tz.startsWith('Pacific/') ? 'New Zealand' : 'Australia') : 'United States (International)',
+      city,
+      isAuOrNz,
+      detectedAt: new Date().toISOString(),
+    };
+  } catch {
+    return {
+      countryCode: 'AU',
+      countryName: 'Australia',
+      city: 'Sydney',
+      isAuOrNz: true,
+      detectedAt: new Date().toISOString(),
+    };
+  }
+}
 
 class LawyerSelectStore {
   private professionals: LegalProfessional[] = [];
@@ -16,6 +151,12 @@ class LawyerSelectStore {
   private confidentialDossiers: Map<string, CaseConfidentialDossier> = new Map();
   private chats: ChatInteraction[] = [];
   private purchases: CasePurchase[] = [];
+  private settings: SystemSettings = DEFAULT_SETTINGS;
+  private products: ProductAndServiceItem[] = DEFAULT_PRODUCTS;
+  private superadminMessages: SuperAdminMessage[] = [];
+  private userRegion: GeolocationRegionInfo = detectDefaultUserRegion();
+  private lawFirms: LawFirmRegistration[] = [];
+  private practitionerRegistrations: PractitionerRegistration[] = [];
   private listeners: Array<() => void> = [];
 
   constructor() {
@@ -97,7 +238,6 @@ class LawyerSelectStore {
         this.chats = [];
       }
     } else {
-      // Create initial demo chat
       this.chats = [
         {
           id: 'chat_demo_1',
@@ -146,15 +286,105 @@ class LawyerSelectStore {
         this.purchases = [];
       }
     }
+
+    // 5. Load Settings
+    const storedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
+    if (storedSettings) {
+      try {
+        this.settings = { ...DEFAULT_SETTINGS, ...JSON.parse(storedSettings) };
+      } catch {
+        this.settings = { ...DEFAULT_SETTINGS };
+      }
+    } else {
+      this.settings = { ...DEFAULT_SETTINGS };
+      this.saveSettings();
+    }
+
+    // 6. Load Products
+    const storedProducts = localStorage.getItem(STORAGE_KEY_PRODUCTS);
+    if (storedProducts) {
+      try {
+        this.products = JSON.parse(storedProducts);
+      } catch {
+        this.products = [...DEFAULT_PRODUCTS];
+      }
+    } else {
+      this.products = [...DEFAULT_PRODUCTS];
+      this.saveProducts();
+    }
+
+    // 7. Load SuperAdmin Messages
+    const storedSaMsgs = localStorage.getItem(STORAGE_KEY_SA_MSGS);
+    if (storedSaMsgs) {
+      try {
+        this.superadminMessages = JSON.parse(storedSaMsgs);
+      } catch {
+        this.superadminMessages = [];
+      }
+    } else {
+      // Demo welcome message
+      this.superadminMessages = [
+        {
+          id: 'sam_welcome_demo',
+          tag: 'lawyerselect',
+          source: 'lawyerselect',
+          senderId: 'client_david_user',
+          senderEmail: 'david.k@enterprise-nsw.com.au',
+          senderName: 'David K.',
+          senderRole: 'client',
+          recipientRole: 'superadmin',
+          messageType: 'general_inquiry',
+          subject: 'Token System & Australian Invoicing Confirmation',
+          body: 'Hello SuperAdmin, confirming that all invoices are denominated in Australian Dollars. Inquiries sent here are always free.',
+          costTokens: 0,
+          costAud: 0,
+          status: 'resolved',
+          adminResponse: 'Confirmed David. All invoices are strictly AUD, and contact with SuperAdmin incurs zero tokens.',
+          adminRespondedAt: new Date().toISOString(),
+          createdAt: new Date(Date.now() - 86400000).toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      ];
+      this.saveSuperAdminMessages();
+    }
+
+    // 8. Load User Region
+    const storedRegion = localStorage.getItem(STORAGE_KEY_USER_REGION);
+    if (storedRegion) {
+      try {
+        this.userRegion = JSON.parse(storedRegion);
+      } catch {
+        this.userRegion = detectDefaultUserRegion();
+      }
+    } else {
+      this.userRegion = detectDefaultUserRegion();
+      localStorage.setItem(STORAGE_KEY_USER_REGION, JSON.stringify(this.userRegion));
+    }
+
+    // 9. Load Registered Law Firms
+    const storedFirms = localStorage.getItem(STORAGE_KEY_FIRMS);
+    if (storedFirms) {
+      try {
+        this.lawFirms = JSON.parse(storedFirms);
+      } catch {
+        this.lawFirms = [];
+      }
+    }
+
+    // 10. Load Practitioner Registrations
+    const storedPracRegs = localStorage.getItem(STORAGE_KEY_PRAC_REGS);
+    if (storedPracRegs) {
+      try {
+        this.practitionerRegistrations = JSON.parse(storedPracRegs);
+      } catch {
+        this.practitionerRegistrations = [];
+      }
+    }
   }
 
-  /**
-   * Real-time multi-user synchronization with Cloud Firestore.
-   * Ensures matters, profiles, chats, and claims reflect live across all client devices.
-   */
   private initFirestoreSync() {
     try {
-      // 1. Live Sync Marketplace Cases (guaranteeing public PII scrub)
+      // Live Sync Marketplace Cases
       onSnapshot(
         collection(db, 'marketplace_cases'),
         (snapshot) => {
@@ -162,7 +392,6 @@ class LawyerSelectStore {
             const remoteCases: MarketplaceCase[] = [];
             snapshot.forEach((docSnap) => {
               const data = docSnap.data() as MarketplaceCase;
-              // Mandatory PII scrub: never allow raw PII from public collection
               remoteCases.push({
                 ...data,
                 id: docSnap.id,
@@ -173,7 +402,6 @@ class LawyerSelectStore {
               });
             });
 
-            // Merge with local state, preserving local cases while taking latest remote data
             const casesMap = new Map<string, MarketplaceCase>();
             this.cases.forEach((c) => casesMap.set(c.id, c));
             remoteCases.forEach((c) => {
@@ -186,12 +414,10 @@ class LawyerSelectStore {
             this.notify();
           }
         },
-        (err) => {
-          console.warn('Firestore marketplace_cases sync notice:', err.message);
-        }
+        (err) => console.warn('Firestore marketplace_cases sync notice:', err.message)
       );
 
-      // 2. Live Sync Legal Professionals
+      // Live Sync Legal Professionals
       onSnapshot(
         collection(db, 'legal_professionals'),
         (snapshot) => {
@@ -213,12 +439,10 @@ class LawyerSelectStore {
             this.notify();
           }
         },
-        (err) => {
-          console.warn('Firestore legal_professionals sync notice:', err.message);
-        }
+        (err) => console.warn('Firestore legal_professionals sync notice:', err.message)
       );
 
-      // 3. Live Sync Chat Interactions
+      // Live Sync Chat Interactions
       onSnapshot(
         collection(db, 'chat_interactions'),
         (snapshot) => {
@@ -237,7 +461,6 @@ class LawyerSelectStore {
             remoteChats.forEach((remoteChat) => {
               const localChat = chatsMap.get(remoteChat.id);
               if (localChat) {
-                // Merge message histories by ID and sort chronologically
                 const msgMap = new Map<string, ChatMessage>();
                 (localChat.messages || []).forEach((m) => msgMap.set(m.id, m));
                 (remoteChat.messages || []).forEach((m) => msgMap.set(m.id, m));
@@ -259,12 +482,10 @@ class LawyerSelectStore {
             this.notify();
           }
         },
-        (err) => {
-          console.warn('Firestore chat_interactions sync notice:', err.message);
-        }
+        (err) => console.warn('Firestore chat_interactions sync notice:', err.message)
       );
 
-      // 4. Live Sync Case Purchases
+      // Live Sync Case Purchases
       onSnapshot(
         collection(db, 'case_purchases'),
         (snapshot) => {
@@ -286,9 +507,76 @@ class LawyerSelectStore {
             this.notify();
           }
         },
-        (err) => {
-          console.warn('Firestore case_purchases sync notice:', err.message);
-        }
+        (err) => console.warn('Firestore case_purchases sync notice:', err.message)
+      );
+
+      // Live Sync System Settings
+      onSnapshot(
+        collection(db, 'system_settings'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            snapshot.forEach((docSnap) => {
+              if (docSnap.id === 'global_config') {
+                this.settings = { ...this.settings, ...(docSnap.data() as SystemSettings) };
+                this.saveSettings();
+                this.notify();
+              }
+            });
+          }
+        },
+        () => { }
+      );
+
+      // Live Sync Products and Services
+      onSnapshot(
+        collection(db, 'products_and_services'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const remoteProducts: ProductAndServiceItem[] = [];
+            snapshot.forEach((docSnap) => {
+              remoteProducts.push({
+                ...(docSnap.data() as ProductAndServiceItem),
+                id: docSnap.id,
+              });
+            });
+
+            const pMap = new Map<string, ProductAndServiceItem>();
+            this.products.forEach((p) => pMap.set(p.id, p));
+            remoteProducts.forEach((p) => pMap.set(p.id, p));
+
+            this.products = Array.from(pMap.values());
+            this.saveProducts();
+            this.notify();
+          }
+        },
+        () => { }
+      );
+
+      // Live Sync SuperAdmin Messages
+      onSnapshot(
+        collection(db, 'superadmin_messages'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const remoteMsgs: SuperAdminMessage[] = [];
+            snapshot.forEach((docSnap) => {
+              remoteMsgs.push({
+                ...(docSnap.data() as SuperAdminMessage),
+                id: docSnap.id,
+              });
+            });
+
+            const msgMap = new Map<string, SuperAdminMessage>();
+            this.superadminMessages.forEach((m) => msgMap.set(m.id, m));
+            remoteMsgs.forEach((m) => msgMap.set(m.id, m));
+
+            this.superadminMessages = Array.from(msgMap.values()).sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            this.saveSuperAdminMessages();
+            this.notify();
+          }
+        },
+        () => { }
       );
     } catch (e: any) {
       console.warn('Firestore live listener initialization note:', e?.message);
@@ -307,6 +595,281 @@ class LawyerSelectStore {
   }
 
   // ==========================================
+  // CURRENCY, GEOLOCATION & TOKEN MATHEMATICS
+  // ==========================================
+
+  /**
+   * Enforces business invariant: zero decimals, strictly whole numbers rounded up.
+   */
+  public roundUpToWhole(val: number): number {
+    return Math.ceil(val);
+  }
+
+  /**
+   * Currency conversion from AUD to USD.
+   * Business invariant: maximum 3 decimals for conversion rate display.
+   */
+  public convertAudToUsd(audAmount: number): number {
+    const rate = this.settings.audToUsdExchangeRate || 0.655;
+    return Number((audAmount * rate).toFixed(3));
+  }
+
+  public getSettings(): SystemSettings {
+    return { ...this.settings };
+  }
+
+  public updateSettings(updates: Partial<SystemSettings>): void {
+    this.settings = {
+      ...this.settings,
+      ...updates,
+      defaultCurrency: 'AUD', // Immutable default
+      defaultTokenPriceAud: 1, // Fixed 1 Token = AUD $1
+      roundingPolicy: 'CEIL_WHOLE_NUMBERS',
+      updatedAt: new Date().toISOString(),
+    };
+    this.saveSettings();
+    this.notify();
+
+    try {
+      const docRef = doc(db, 'system_settings', 'global_config');
+      setDoc(docRef, this.settings, { merge: true }).catch(() => { });
+    } catch { }
+  }
+
+  private saveSettings() {
+    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(this.settings));
+  }
+
+  public getUserRegion(): GeolocationRegionInfo {
+    return { ...this.userRegion };
+  }
+
+  public setUserRegionOverride(isAuOrNz: boolean, countryCode?: string, countryName?: string): void {
+    this.userRegion = {
+      countryCode: countryCode || (isAuOrNz ? 'AU' : 'US'),
+      countryName: countryName || (isAuOrNz ? 'Australia' : 'United States (International)'),
+      city: isAuOrNz ? 'Sydney' : 'New York',
+      isAuOrNz,
+      detectedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(STORAGE_KEY_USER_REGION, JSON.stringify(this.userRegion));
+    this.notify();
+  }
+
+  /**
+   * Format item prices conforming to all token and currency directives:
+   * - Strict whole integer tokens (Math.ceil, no decimals).
+   * - 1 Token = AUD $1 default.
+   * - AU/NZ users see AUD natively.
+   * - Outside AU/NZ users see USD currency conversion with max 3 decimals.
+   * - Tooltip / Hover displays comprehensive AUD & USD equivalent details.
+   */
+  public formatItemPrice(tokenAmount: number) {
+    const wholeTokens = Math.max(1, Math.ceil(tokenAmount));
+    const priceAud = wholeTokens * (this.settings.defaultTokenPriceAud || 1);
+    const priceUsd = this.convertAudToUsd(priceAud);
+    const isAuOrNz = this.userRegion.isAuOrNz;
+
+    const audText = `AUD $${priceAud}`;
+    const usdText = `USD $${priceUsd.toFixed(3)}`;
+
+    let primaryDisplay = '';
+    let hoverDisclaimer = '';
+
+    if (this.settings.isTokenSystemEnabled) {
+      primaryDisplay = `${wholeTokens} Tokens`;
+      hoverDisclaimer = isAuOrNz
+        ? `${audText} (1 Token = AUD $1.00 • Invoices in AUD)`
+        : `${usdText} (Converted from ${audText} @ max 3 decimals • Invoices in AUD)`;
+    } else if (isAuOrNz) {
+      primaryDisplay = audText;
+      hoverDisclaimer = `USD Conversion: ${usdText} (Invoices strictly in AUD)`;
+    } else {
+      primaryDisplay = usdText;
+      hoverDisclaimer = `Issued as: ${audText} (All statutory invoices are in AUD)`;
+    }
+
+    return {
+      tokens: wholeTokens,
+      priceAud,
+      priceUsd,
+      audText,
+      usdText,
+      primaryDisplay,
+      hoverDisclaimer,
+      isAuOrNz,
+      invoiceDisclaimer: this.settings.invoiceDisclaimer,
+    };
+  }
+
+  // ==========================================
+  // PRODUCTS & SERVICES (SuperAdmin Item CRUD)
+  // ==========================================
+
+  public getProducts(): ProductAndServiceItem[] {
+    return [...this.products];
+  }
+
+  public setProductTokenAmount(id: string, tokenAmount: number): void {
+    const target = this.products.find((p) => p.id === id);
+    if (!target) return;
+    const wholeTokens = Math.max(1, Math.ceil(tokenAmount));
+    target.tokenAmount = wholeTokens;
+    target.priceAud = wholeTokens * (this.settings.defaultTokenPriceAud || 1);
+    target.priceUsdEstimated = this.convertAudToUsd(target.priceAud);
+    target.updatedAt = new Date().toISOString();
+
+    this.saveProducts();
+    this.notify();
+
+    try {
+      const docRef = doc(db, 'products_and_services', target.id);
+      setDoc(docRef, target, { merge: true }).catch(() => { });
+    } catch { }
+  }
+
+  public addProduct(item: Omit<ProductAndServiceItem, 'id' | 'tag' | 'source' | 'createdAt' | 'updatedAt' | 'priceAud' | 'priceUsdEstimated'> & { tokenAmount: number }): ProductAndServiceItem {
+    const wholeTokens = Math.max(1, Math.ceil(item.tokenAmount));
+    const priceAud = wholeTokens * (this.settings.defaultTokenPriceAud || 1);
+    const priceUsdEstimated = this.convertAudToUsd(priceAud);
+
+    const newProd: ProductAndServiceItem = {
+      id: 'prod_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36).substring(4),
+      tag: 'lawyerselect',
+      source: 'lawyerselect',
+      name: item.name.trim(),
+      description: item.description.trim(),
+      category: item.category,
+      tokenAmount: wholeTokens,
+      priceAud,
+      priceUsdEstimated,
+      isActive: item.isActive ?? true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.products.push(newProd);
+    this.saveProducts();
+    this.notify();
+
+    try {
+      const docRef = doc(db, 'products_and_services', newProd.id);
+      setDoc(docRef, newProd, { merge: true }).catch(() => { });
+    } catch { }
+
+    return newProd;
+  }
+
+  public updateProduct(id: string, updates: Partial<ProductAndServiceItem>): void {
+    const target = this.products.find((p) => p.id === id);
+    if (!target) return;
+
+    if (updates.tokenAmount !== undefined) {
+      const wholeTokens = Math.max(1, Math.ceil(updates.tokenAmount));
+      target.tokenAmount = wholeTokens;
+      target.priceAud = wholeTokens * (this.settings.defaultTokenPriceAud || 1);
+      target.priceUsdEstimated = this.convertAudToUsd(target.priceAud);
+    }
+
+    if (updates.name) target.name = updates.name.trim();
+    if (updates.description) target.description = updates.description.trim();
+    if (updates.category) target.category = updates.category;
+    if (updates.isActive !== undefined) target.isActive = updates.isActive;
+    target.updatedAt = new Date().toISOString();
+
+    this.saveProducts();
+    this.notify();
+
+    try {
+      const docRef = doc(db, 'products_and_services', target.id);
+      setDoc(docRef, target, { merge: true }).catch(() => { });
+    } catch { }
+  }
+
+  public deleteProduct(id: string): void {
+    this.products = this.products.filter((p) => p.id !== id);
+    this.saveProducts();
+    this.notify();
+  }
+
+  private saveProducts() {
+    localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(this.products));
+  }
+
+  // ==========================================
+  // SUPERADMIN MESSAGING (Strictly Free Support & Refunds)
+  // ==========================================
+
+  public getSuperAdminMessages(senderId?: string): SuperAdminMessage[] {
+    if (senderId) {
+      return this.superadminMessages.filter((m) => m.senderId === senderId);
+    }
+    return [...this.superadminMessages];
+  }
+
+  public sendSuperAdminMessage(payload: {
+    senderId: string;
+    senderEmail: string;
+    senderName: string;
+    senderRole: 'client' | 'lawyer' | 'guest';
+    messageType: SuperAdminMessageType;
+    subject: string;
+    body: string;
+  }): SuperAdminMessage {
+    const newMsg: SuperAdminMessage = {
+      id: 'sam_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36).substring(4),
+      tag: 'lawyerselect',
+      source: 'lawyerselect',
+      senderId: payload.senderId,
+      senderEmail: payload.senderEmail,
+      senderName: payload.senderName,
+      senderRole: payload.senderRole,
+      recipientRole: 'superadmin',
+      messageType: payload.messageType,
+      subject: payload.subject.trim(),
+      body: payload.body.trim(),
+      costTokens: 0, // Messages to superadmin are strictly free of charge
+      costAud: 0,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.superadminMessages = [newMsg, ...this.superadminMessages];
+    this.saveSuperAdminMessages();
+    this.notify();
+
+    try {
+      const docRef = doc(db, 'superadmin_messages', newMsg.id);
+      setDoc(docRef, newMsg, { merge: true }).catch(() => { });
+    } catch { }
+
+    return newMsg;
+  }
+
+  public respondToSuperAdminMessage(messageId: string, responseText: string, status: any): void {
+    const msg = this.superadminMessages.find((m) => m.id === messageId);
+    if (!msg) return;
+
+    msg.adminResponse = responseText.trim();
+    msg.adminRespondedAt = new Date().toISOString();
+    msg.status = status;
+    msg.updatedAt = new Date().toISOString();
+
+    this.saveSuperAdminMessages();
+    this.notify();
+
+    try {
+      const docRef = doc(db, 'superadmin_messages', msg.id);
+      setDoc(docRef, msg, { merge: true }).catch(() => { });
+    } catch { }
+  }
+
+  private saveSuperAdminMessages() {
+    localStorage.setItem(STORAGE_KEY_SA_MSGS, JSON.stringify(this.superadminMessages));
+  }
+
+  // ==========================================
   // LEGAL PROFESSIONALS
   // ==========================================
   public getProfessionals(): LegalProfessional[] {
@@ -318,7 +881,6 @@ class LawyerSelectStore {
     this.saveProfessionals();
     this.notify();
 
-    // Async sync to Firestore
     try {
       const docRef = doc(db, 'legal_professionals', pro.id);
       setDoc(docRef, pro, { merge: true }).catch((err) => console.warn('Firestore pro sync notice:', err));
@@ -332,11 +894,114 @@ class LawyerSelectStore {
   }
 
   // ==========================================
+  // DUAL REGISTRATION: LAW FIRMS & PRACTITIONERS
+  // ==========================================
+  public getLawFirms(): LawFirmRegistration[] {
+    return [...this.lawFirms];
+  }
+
+  public registerLawFirm(
+    firmInput: Omit<LawFirmRegistration, 'id' | 'tag' | 'source' | 'registrationType' | 'status' | 'createdAt' | 'updatedAt'>
+  ): LawFirmRegistration {
+    const now = new Date().toISOString();
+    const newFirm: LawFirmRegistration = {
+      ...firmInput,
+      id: 'firm_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36).substring(4),
+      tag: 'lawyerselect',
+      source: 'lawyerselect',
+      registrationType: 'law_firm',
+      status: 'approved',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.lawFirms = [newFirm, ...this.lawFirms];
+    localStorage.setItem(STORAGE_KEY_FIRMS, JSON.stringify(this.lawFirms));
+    this.notify();
+
+    try {
+      const docRef = doc(db, 'law_firms', newFirm.id);
+      setDoc(docRef, newFirm, { merge: true }).catch(() => { });
+    } catch { }
+
+    return newFirm;
+  }
+
+  public getPractitionerRegistrations(): PractitionerRegistration[] {
+    return [...this.practitionerRegistrations];
+  }
+
+  public registerPractitioner(
+    pracInput: Omit<PractitionerRegistration, 'id' | 'tag' | 'source' | 'registrationType' | 'status' | 'createdAt' | 'updatedAt'>
+  ): { registration: PractitionerRegistration; directoryProfile: LegalProfessional } {
+    const now = new Date().toISOString();
+    const regId = 'preg_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36).substring(4);
+    const proId = 'lp_' + Math.random().toString(36).substring(2, 9);
+
+    const registration: PractitionerRegistration = {
+      ...pracInput,
+      id: regId,
+      tag: 'lawyerselect',
+      source: 'lawyerselect',
+      registrationType: 'individual_practitioner',
+      status: 'approved',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.practitionerRegistrations = [registration, ...this.practitionerRegistrations];
+    localStorage.setItem(STORAGE_KEY_PRAC_REGS, JSON.stringify(this.practitionerRegistrations));
+
+    const p = pracInput.practitionerProfile;
+    const cap = pracInput.operationalCapabilities;
+    const comp = pracInput.complianceAndInsurance;
+
+    const validJurisdictions = cap.jurisdictionsAdmitted.filter((j): j is any =>
+      ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT', 'Federal'].includes(j)
+    );
+
+    const directoryProfile: LegalProfessional = {
+      id: proId,
+      tag: 'lawyerselect',
+      source: 'lawyerselect',
+      fullName: `${p.prefix ? p.prefix + ' ' : ''}${p.fullLegalName}${p.postNominals ? ', ' + p.postNominals : ''}`.trim(),
+      title: p.title,
+      firmName: p.affiliatedFirmName || 'Independent Legal Practice',
+      email: p.email,
+      phone: p.phone,
+      jurisdictions: validJurisdictions.length > 0 ? validJurisdictions : ['NSW', 'Federal'],
+      practiceAreas:
+        cap.primaryPracticeAreas.length > 0
+          ? cap.primaryPracticeAreas
+          : ['Commercial & Corporate'],
+      yearsOfExperience: Math.ceil(p.yearsOfExperience || 10),
+      barOrRegistrationNumber: p.practisingCertificate.pcNumber || 'PC-AU-VERIFIED',
+      bio: `${pracInput.approvedSheetMeta.executiveSummary} Admitted via ${p.practisingCertificate.admissionJurisdiction}. Insured under ${comp.insurerOrSchemeName} (${comp.policyNumber}). Languages: ${cap.languagesSpoken.join(', ')}.`,
+      feeStructure: p.feeStructure,
+      hourlyRateAud: Math.ceil(p.hourlyRateAud || 450),
+      locationCity: p.locationCity || 'Sydney',
+      locationPostcode: p.locationPostcode || '2000',
+      isVerified: true,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.addProfessional(directoryProfile);
+
+    try {
+      const docRef = doc(db, 'practitioner_registrations', registration.id);
+      setDoc(docRef, registration, { merge: true }).catch(() => { });
+    } catch { }
+
+    return { registration, directoryProfile };
+  }
+
+  // ==========================================
   // MARKETPLACE CASES (PII-Protected Public Feed)
   // ==========================================
   public getMarketplaceCases(viewerLawyerId?: string): MarketplaceCase[] {
     return this.cases.map((c) => {
-      // Attach confidential dossier ONLY if the case is claimed AND the viewer is the claiming lawyer
       if (c.status === 'claimed' && viewerLawyerId && c.claimedBy === viewerLawyerId) {
         const dossier = this.confidentialDossiers.get(c.id);
         if (dossier) {
@@ -350,7 +1015,6 @@ class LawyerSelectStore {
         }
       }
 
-      // For open, locked, or claimed cases viewed by non-purchaser, PII is strictly stripped
       return {
         ...c,
         clientFullName: undefined,
@@ -369,7 +1033,6 @@ class LawyerSelectStore {
   }
 
   public addMarketplaceCase(c: MarketplaceCase) {
-    // If incoming submission includes confidential PII, archive it securely in the vault
     if (c.clientFullName || c.clientEmail || c.clientPhone || c.fullFactualDetails) {
       this.confidentialDossiers.set(c.id, {
         caseId: c.id,
@@ -381,7 +1044,6 @@ class LawyerSelectStore {
       this.saveDossiers();
     }
 
-    // Strip PII from public case
     const publicCase: MarketplaceCase = {
       ...c,
       clientFullName: undefined,
@@ -403,7 +1065,7 @@ class LawyerSelectStore {
   }
 
   /**
-   * Unlock case lead for $20 flat fee
+   * Unlock case lead for $20 flat fee (or 20 tokens)
    */
   public purchaseCaseLead(caseId: string, lawyerId: string, lawyerName: string): MarketplaceCase | null {
     const targetCase = this.cases.find((c) => c.id === caseId);
@@ -413,19 +1075,20 @@ class LawyerSelectStore {
     const purchase: CasePurchase = {
       id: purchaseId,
       tag: 'lawyerselect',
+      source: 'lawyerselect',
       caseId: caseId,
       legalProfessionalId: lawyerId,
-      amount: 2000, // $20.00 AUD
+      amount: 2000, // $20.00 AUD (20 tokens)
       currency: 'aud',
       status: 'completed',
       stripeSessionId: 'cs_test_' + Math.random().toString(36).substring(2, 12),
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     this.purchases.push(purchase);
     localStorage.setItem(STORAGE_KEY_PURCHASES, JSON.stringify(this.purchases));
 
-    // Update case status to claimed
     targetCase.status = 'claimed';
     targetCase.claimedBy = lawyerId;
     targetCase.claimedByName = lawyerName;
@@ -469,9 +1132,6 @@ class LawyerSelectStore {
     return [...this.chats];
   }
 
-  /**
-   * Creates or gets a chat interaction strictly when client selects to speak with a lawyer.
-   */
   public createOrGetChatInteraction(
     clientId: string,
     clientName: string,
@@ -488,7 +1148,7 @@ class LawyerSelectStore {
       interaction = {
         id: chatId,
         tag: 'lawyerselect',
-        source: 'lawyerselect' as any,
+        source: 'lawyerselect',
         clientId,
         clientName,
         clientEmail,
@@ -496,7 +1156,7 @@ class LawyerSelectStore {
         lawyerName: lawyer.fullName,
         lawyerTitle: lawyer.title,
         lawyerFirm: lawyer.firmName,
-        caseId: caseId || null as any,
+        caseId: caseId || null,
         status: 'active',
         lastMessageSnippet: `Consultation channel opened with ${lawyer.fullName}.`,
         lastMessageAt: new Date().toISOString(),
@@ -548,6 +1208,7 @@ class LawyerSelectStore {
       read: false,
     };
 
+    interaction.messages = interaction.messages || [];
     interaction.messages.push(newMessage);
     interaction.lastMessageSnippet = newMessage.content.substring(0, 120);
     interaction.lastMessageAt = newMessage.sentAt;

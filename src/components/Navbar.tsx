@@ -115,6 +115,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             onClick={() => setActiveTab('onboarding')}
+            data-agent-id="nav-tab-register"
+            data-testid="nav-tab-register"
+            aria-label="Register as a Lawyer"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -132,7 +135,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
           >
             <UserCheck size={15} />
-            <span>Legal Pro AI Intake</span>
+            <span>Register</span>
           </button>
 
           <button

@@ -11,7 +11,8 @@ import {
   SuperAdminMessageType,
   GeolocationRegionInfo,
   LawFirmRegistration,
-  PractitionerRegistration
+  PractitionerRegistration,
+  EncryptedLawyerApplicationRecord,
 } from '../types';
 import { SEED_LEGAL_PROFESSIONALS } from '../data/seedLawyers';
 import { SEED_MARKETPLACE_CASES, SEED_CONFIDENTIAL_DOSSIERS } from '../data/seedCases';
@@ -1229,6 +1230,29 @@ class LawyerSelectStore {
 
   private saveChats() {
     localStorage.setItem(STORAGE_KEY_CHATS, JSON.stringify(this.chats));
+  }
+
+  public saveEncryptedLawyerApplication(record: EncryptedLawyerApplicationRecord): void {
+    try {
+      const storageKey = 'lawyerselect_encrypted_applications_v1';
+      const existingRaw = localStorage.getItem(storageKey);
+      const list: EncryptedLawyerApplicationRecord[] = existingRaw ? JSON.parse(existingRaw) : [];
+      const filtered = list.filter((item) => item.id !== record.id);
+      filtered.unshift(record);
+      localStorage.setItem(storageKey, JSON.stringify(filtered));
+    } catch (e) {
+      console.warn('Local encrypted application storage notice:', e);
+    }
+
+    try {
+      const cleanPayload = JSON.parse(JSON.stringify(record));
+      const docRef = doc(db, 'lawyer_applications', record.id);
+      setDoc(docRef, cleanPayload, { merge: true }).catch((err) =>
+        console.warn('Firestore lawyer_applications sync notice:', err)
+      );
+    } catch {
+      // Offline safe fallback
+    }
   }
 }
 

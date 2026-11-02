@@ -519,4 +519,83 @@ export interface GeoLocationSettings {
   rateLastUpdated?: string;
 }
 
+// =========================================================================
+// 17-Category Lawyer Application Dossier (256-Bit Encrypted & Token-Gated)
+// =========================================================================
+
+export interface Lawyer17CategoryDossier {
+  fullName: string;
+  // 1. Location
+  locationJurisdiction: Jurisdiction;
+  locationCitySuburb: string;
+  primaryOfficeAddress: string;
+  // 2. Practice Areas
+  practiceAreas: PracticeArea[];
+  // 3. Bar Admissions & Licensing
+  barAdmissionStatus: string;
+  yearAdmitted: number; // Strict integer
+  regulatoryBodyId: string;
+  // 4. Firm or Employer Affiliation
+  firmOrEmployerAffiliation: string;
+  affiliationType: 'Law Firm Partner/Employee' | 'Solo Practitioner' | 'Barristers Chambers' | 'In-House Counsel';
+  // 5. Experience Level & Seniority
+  yearsOfPractice: number; // Strict integer
+  seniorityTitle: LegalTitle | 'Partner' | 'Principal' | 'Special Counsel' | 'Senior Associate' | 'Associate';
+  // 6. Past Legal Work Experience
+  pastLegalWorkExperience: string[];
+  // 7. Career Milestones & Roles
+  careerMilestonesAndRoles: string[];
+  // 8. Formal Education & Law Degrees
+  formalEducationAndLawDegrees: string[];
+  // 9. Academic & Continuing Legal Education (CLE)
+  academicAndCleQualifications: string[];
+  // 10. Professional Accreditations & Specialist Certifications
+  professionalAccreditations: string[];
+  // 11. Courts of Admission & Rights of Audience
+  courtsOfAdmission: string[];
+  // 12. Judicial Appointments & Public Service
+  judicialAndPublicService: string[];
+  // 13. Publications, Case Studies & Notable Matters
+  publicationsAndNotableMatters: string[];
+  // 14. Fee Structure & Pricing
+  feeStructure: FeeStructure;
+  hourlyRateAud: number; // Strict integer
+  feeSummaryNotes: string;
+  // 15. Languages Spoken
+  languagesSpoken: string[];
+  // 16. Verified Contact Channels (256-Bit Encrypted & Token-Gated)
+  contactEmail: string;
+  contactPhone: string;
+  secureBookingOrPortalUrl: string;
+  // 17. Client Reviews & Reputation Metrics
+  reputationAndDisciplinaryStanding: string;
+  peerRecognitionsAndRankings: string[];
+  executiveSummary: string;
+  aiConfidenceScore: number; // 1..100 integer
+}
+
+export interface EncryptedLawyerApplicationRecord {
+  id: string;
+  tag: 'lawyerselect';
+  source: 'lawyerselect';
+  supporterGoogleUid: string;
+  supporterGoogleEmail: string;
+  dossier: Lawyer17CategoryDossier;
+  encryptionMeta: {
+    algorithm: 'AES-256-GCM';
+    keyLengthBits: 256;
+    ivHex: string;
+    ciphertextBase64: string;
+    sha256IntegrityHash: string;
+    encryptedAt: string;
+  };
+  tokenReleaseRequirement: {
+    tokensRequiredToUnlockContact: number; // Strict integer (default 1 token = $1 AUD)
+    isContactLockedUntilTokenPayment: boolean;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 

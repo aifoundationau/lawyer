@@ -403,6 +403,33 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 
 ---
 
+### Domain 14: 17-Category Lawyer Application Dossier (`lawyer_applications`)
+*Ingestion Channels*: `Register` Portal (Google Supporter Gate -> Single AI Paste Box -> 256-Bit AES-GCM Encryption -> Firestore `lawyer_applications/{id}`).
+*AI Agent Skill*: `.agents/skills/legal-practitioner-dossier-parser/SKILL.md` (compatible with `Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+
+| Category # | Category Name | Schema Field(s) | Invariants & Security |
+| :--- | :--- | :--- | :--- |
+| **1** | Location | `locationJurisdiction`, `locationCitySuburb`, `primaryOfficeAddress` | Valid AU Jurisdiction (`NSW`, `VIC`, `QLD`, `WA`, `SA`, `TAS`, `ACT`, `NT`, `Federal`). |
+| **2** | Practice Areas | `practiceAreas` | Non-empty array of `PracticeArea` enums. |
+| **3** | Bar Admissions & Licensing | `barAdmissionStatus`, `yearAdmitted`, `regulatoryBodyId` | `yearAdmitted` strict whole integer. |
+| **4** | Firm or Employer Affiliation | `firmOrEmployerAffiliation`, `affiliationType` | Firm, Chambers, Solo, or In-House. |
+| **5** | Experience Level & Seniority | `yearsOfPractice`, `seniorityTitle` | `yearsOfPractice` strict whole integer (`Math.ceil`). |
+| **6** | Past Legal Work Experience | `pastLegalWorkExperience` | Array of previous firms, clerkships, and government roles. |
+| **7** | Career Milestones & Roles | `careerMilestonesAndRoles` | Chronological career progression array. |
+| **8** | Formal Education & Law Degrees | `formalEducationAndLawDegrees` | Undergraduate, `LL.B.`, `J.D.`, `LL.M.`, graduation years. |
+| **9** | Academic & Continuing Legal Education | `academicAndCleQualifications` | Lectureships, teaching roles, CLE compliance. |
+| **10** | Professional Accreditations | `professionalAccreditations` | Law Society Specialist Accreditations, NMAS Mediator, Notary. |
+| **11** | Courts of Admission | `courtsOfAdmission` | State Supreme Court, Federal Court, High Court of Australia. |
+| **12** | Judicial Appointments & Public Service | `judicialAndPublicService` | Judgeships, tribunal memberships, pro bono panels. |
+| **13** | Publications, Case Studies & Notable Matters | `publicationsAndNotableMatters` | Reported judgments, published legal papers, landmark trials. |
+| **14** | Fee Structure & Pricing | `feeStructure`, `hourlyRateAud`, `feeSummaryNotes` | `hourlyRateAud` strict whole integer in AUD. |
+| **15** | Languages Spoken | `languagesSpoken` | Array of consultation languages. |
+| **16** | Verified Contact Channels | `contactEmail`, `contactPhone`, `secureBookingOrPortalUrl` | **256-Bit AES-GCM Encrypted & Token-Gated** (released after token payment). |
+| **17** | Client Reviews & Reputation Metrics | `reputationAndDisciplinaryStanding`, `peerRecognitionsAndRankings` | Verified standing and peer rankings. |
+
+
+---
+
 ### Domain 8: SuperAdmin Direct Inquiries & Refund Requests (`superadmin_messages`)
 *Ingestion Channel*: Direct Help & Support Channel (`/api/messages/superadmin`).  
 *Financial Invariant*: **Messages to SuperAdmin are ALWAYS FREE (Cost: 0 Tokens / $0.00 AUD).**  
@@ -556,6 +583,33 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
   }
 }
 ```
+
+---
+
+### Domain 14: 17-Category Lawyer Application Dossier (`lawyer_applications`)
+*Ingestion Channels*: `Register` Portal (Google Supporter Gate -> Single AI Paste Box -> 256-Bit AES-GCM Encryption -> Firestore `lawyer_applications/{id}`).
+*AI Agent Skill*: `.agents/skills/legal-practitioner-dossier-parser/SKILL.md` (compatible with `Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+
+| Category # | Category Name | Schema Field(s) | Invariants & Security |
+| :--- | :--- | :--- | :--- |
+| **1** | Location | `locationJurisdiction`, `locationCitySuburb`, `primaryOfficeAddress` | Valid AU Jurisdiction (`NSW`, `VIC`, `QLD`, `WA`, `SA`, `TAS`, `ACT`, `NT`, `Federal`). |
+| **2** | Practice Areas | `practiceAreas` | Non-empty array of `PracticeArea` enums. |
+| **3** | Bar Admissions & Licensing | `barAdmissionStatus`, `yearAdmitted`, `regulatoryBodyId` | `yearAdmitted` strict whole integer. |
+| **4** | Firm or Employer Affiliation | `firmOrEmployerAffiliation`, `affiliationType` | Firm, Chambers, Solo, or In-House. |
+| **5** | Experience Level & Seniority | `yearsOfPractice`, `seniorityTitle` | `yearsOfPractice` strict whole integer (`Math.ceil`). |
+| **6** | Past Legal Work Experience | `pastLegalWorkExperience` | Array of previous firms, clerkships, and government roles. |
+| **7** | Career Milestones & Roles | `careerMilestonesAndRoles` | Chronological career progression array. |
+| **8** | Formal Education & Law Degrees | `formalEducationAndLawDegrees` | Undergraduate, `LL.B.`, `J.D.`, `LL.M.`, graduation years. |
+| **9** | Academic & Continuing Legal Education | `academicAndCleQualifications` | Lectureships, teaching roles, CLE compliance. |
+| **10** | Professional Accreditations | `professionalAccreditations` | Law Society Specialist Accreditations, NMAS Mediator, Notary. |
+| **11** | Courts of Admission | `courtsOfAdmission` | State Supreme Court, Federal Court, High Court of Australia. |
+| **12** | Judicial Appointments & Public Service | `judicialAndPublicService` | Judgeships, tribunal memberships, pro bono panels. |
+| **13** | Publications, Case Studies & Notable Matters | `publicationsAndNotableMatters` | Reported judgments, published legal papers, landmark trials. |
+| **14** | Fee Structure & Pricing | `feeStructure`, `hourlyRateAud`, `feeSummaryNotes` | `hourlyRateAud` strict whole integer in AUD. |
+| **15** | Languages Spoken | `languagesSpoken` | Array of consultation languages. |
+| **16** | Verified Contact Channels | `contactEmail`, `contactPhone`, `secureBookingOrPortalUrl` | **256-Bit AES-GCM Encrypted & Token-Gated** (released after token payment). |
+| **17** | Client Reviews & Reputation Metrics | `reputationAndDisciplinaryStanding`, `peerRecognitionsAndRankings` | Verified standing and peer rankings. |
+
 
 ---
 
@@ -808,6 +862,33 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
   }
 }
 ```
+
+---
+
+### Domain 14: 17-Category Lawyer Application Dossier (`lawyer_applications`)
+*Ingestion Channels*: `Register` Portal (Google Supporter Gate -> Single AI Paste Box -> 256-Bit AES-GCM Encryption -> Firestore `lawyer_applications/{id}`).
+*AI Agent Skill*: `.agents/skills/legal-practitioner-dossier-parser/SKILL.md` (compatible with `Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+
+| Category # | Category Name | Schema Field(s) | Invariants & Security |
+| :--- | :--- | :--- | :--- |
+| **1** | Location | `locationJurisdiction`, `locationCitySuburb`, `primaryOfficeAddress` | Valid AU Jurisdiction (`NSW`, `VIC`, `QLD`, `WA`, `SA`, `TAS`, `ACT`, `NT`, `Federal`). |
+| **2** | Practice Areas | `practiceAreas` | Non-empty array of `PracticeArea` enums. |
+| **3** | Bar Admissions & Licensing | `barAdmissionStatus`, `yearAdmitted`, `regulatoryBodyId` | `yearAdmitted` strict whole integer. |
+| **4** | Firm or Employer Affiliation | `firmOrEmployerAffiliation`, `affiliationType` | Firm, Chambers, Solo, or In-House. |
+| **5** | Experience Level & Seniority | `yearsOfPractice`, `seniorityTitle` | `yearsOfPractice` strict whole integer (`Math.ceil`). |
+| **6** | Past Legal Work Experience | `pastLegalWorkExperience` | Array of previous firms, clerkships, and government roles. |
+| **7** | Career Milestones & Roles | `careerMilestonesAndRoles` | Chronological career progression array. |
+| **8** | Formal Education & Law Degrees | `formalEducationAndLawDegrees` | Undergraduate, `LL.B.`, `J.D.`, `LL.M.`, graduation years. |
+| **9** | Academic & Continuing Legal Education | `academicAndCleQualifications` | Lectureships, teaching roles, CLE compliance. |
+| **10** | Professional Accreditations | `professionalAccreditations` | Law Society Specialist Accreditations, NMAS Mediator, Notary. |
+| **11** | Courts of Admission | `courtsOfAdmission` | State Supreme Court, Federal Court, High Court of Australia. |
+| **12** | Judicial Appointments & Public Service | `judicialAndPublicService` | Judgeships, tribunal memberships, pro bono panels. |
+| **13** | Publications, Case Studies & Notable Matters | `publicationsAndNotableMatters` | Reported judgments, published legal papers, landmark trials. |
+| **14** | Fee Structure & Pricing | `feeStructure`, `hourlyRateAud`, `feeSummaryNotes` | `hourlyRateAud` strict whole integer in AUD. |
+| **15** | Languages Spoken | `languagesSpoken` | Array of consultation languages. |
+| **16** | Verified Contact Channels | `contactEmail`, `contactPhone`, `secureBookingOrPortalUrl` | **256-Bit AES-GCM Encrypted & Token-Gated** (released after token payment). |
+| **17** | Client Reviews & Reputation Metrics | `reputationAndDisciplinaryStanding`, `peerRecognitionsAndRankings` | Verified standing and peer rankings. |
+
 
 ---
 
@@ -1101,5 +1182,32 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
   }
 }
 ```
+
+---
+
+### Domain 14: 17-Category Lawyer Application Dossier (`lawyer_applications`)
+*Ingestion Channels*: `Register` Portal (Google Supporter Gate -> Single AI Paste Box -> 256-Bit AES-GCM Encryption -> Firestore `lawyer_applications/{id}`).
+*AI Agent Skill*: `.agents/skills/legal-practitioner-dossier-parser/SKILL.md` (compatible with `Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+
+| Category # | Category Name | Schema Field(s) | Invariants & Security |
+| :--- | :--- | :--- | :--- |
+| **1** | Location | `locationJurisdiction`, `locationCitySuburb`, `primaryOfficeAddress` | Valid AU Jurisdiction (`NSW`, `VIC`, `QLD`, `WA`, `SA`, `TAS`, `ACT`, `NT`, `Federal`). |
+| **2** | Practice Areas | `practiceAreas` | Non-empty array of `PracticeArea` enums. |
+| **3** | Bar Admissions & Licensing | `barAdmissionStatus`, `yearAdmitted`, `regulatoryBodyId` | `yearAdmitted` strict whole integer. |
+| **4** | Firm or Employer Affiliation | `firmOrEmployerAffiliation`, `affiliationType` | Firm, Chambers, Solo, or In-House. |
+| **5** | Experience Level & Seniority | `yearsOfPractice`, `seniorityTitle` | `yearsOfPractice` strict whole integer (`Math.ceil`). |
+| **6** | Past Legal Work Experience | `pastLegalWorkExperience` | Array of previous firms, clerkships, and government roles. |
+| **7** | Career Milestones & Roles | `careerMilestonesAndRoles` | Chronological career progression array. |
+| **8** | Formal Education & Law Degrees | `formalEducationAndLawDegrees` | Undergraduate, `LL.B.`, `J.D.`, `LL.M.`, graduation years. |
+| **9** | Academic & Continuing Legal Education | `academicAndCleQualifications` | Lectureships, teaching roles, CLE compliance. |
+| **10** | Professional Accreditations | `professionalAccreditations` | Law Society Specialist Accreditations, NMAS Mediator, Notary. |
+| **11** | Courts of Admission | `courtsOfAdmission` | State Supreme Court, Federal Court, High Court of Australia. |
+| **12** | Judicial Appointments & Public Service | `judicialAndPublicService` | Judgeships, tribunal memberships, pro bono panels. |
+| **13** | Publications, Case Studies & Notable Matters | `publicationsAndNotableMatters` | Reported judgments, published legal papers, landmark trials. |
+| **14** | Fee Structure & Pricing | `feeStructure`, `hourlyRateAud`, `feeSummaryNotes` | `hourlyRateAud` strict whole integer in AUD. |
+| **15** | Languages Spoken | `languagesSpoken` | Array of consultation languages. |
+| **16** | Verified Contact Channels | `contactEmail`, `contactPhone`, `secureBookingOrPortalUrl` | **256-Bit AES-GCM Encrypted & Token-Gated** (released after token payment). |
+| **17** | Client Reviews & Reputation Metrics | `reputationAndDisciplinaryStanding`, `peerRecognitionsAndRankings` | Verified standing and peer rankings. |
+
 
 

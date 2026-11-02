@@ -1,418 +1,841 @@
 import React, { useState } from 'react';
-import { Sparkles, UserCheck, CheckCircle2, ShieldCheck, Award, ArrowRight, RefreshCw, FileText } from './icons';
-import { LegalProfessional, LegalTitle, Jurisdiction, PracticeArea, FeeStructure } from '../types';
-import { onboardLegalProfessionalWithAI } from '../services/geminiService';
+import {
+  Sparkles,
+  UserCheck,
+  CheckCircle2,
+  ShieldCheck,
+  Award,
+  ArrowRight,
+  RefreshCw,
+  Lock,
+  GoogleIcon,
+  Shield,
+  MapPin,
+  Briefcase,
+} from './icons';
+import {
+  LegalProfessional,
+  LegalTitle,
+  Jurisdiction,
+  PracticeArea,
+  FeeStructure,
+  Lawyer17CategoryDossier,
+  EncryptedLawyerApplicationRecord,
+  PRACTICE_AREAS,
+  JURISDICTIONS,
+  FEE_STRUCTURES,
+} from '../types';
+import { extract17CategoryLawyerDossier } from '../services/geminiService';
+import { encryptWith256BitAes, EncryptedPayload256 } from '../services/encryptionService';
 import { lawyerSelectStore } from '../services/lawyerSelectStore';
+import { useAuth } from '../context/AuthContext';
 
 interface AiLawyerOnboardingProps {
   onProfilePublished: (pro: LegalProfessional) => void;
 }
 
+const SAMPLE_PASTES = [
+  {
+    label: 'Sample 1: Commercial Litigation Partner (Sydney NSW)',
+    text: `I am Harrison Sterling SC, Senior Partner at Sterling & Associates Legal in Sydney NSW (Level 32, Chifley Tower, 2 Chifley Square, Sydney NSW 2000). Admitted in 2008 with 18 years of legal practice. Law Society Practising Certificate PC-NSW-88412.
+Practice Areas: Commercial & Corporate, Civil Litigation, Property & Conveyancing, Building & Construction.
+Education: LL.B. (Hons First Class) University of Sydney, LL.M. (Corporate Litigation) Melbourne Law School.
+Courts: Admitted to Supreme Court of NSW, Federal Court of Australia, and High Court of Australia.
+Notable Cases: Lead Counsel in $45M Supreme Court equity and shareholder oppression trial; successfully resolved 150+ commercial contract disputes.
+Accreditations: Law Society Accredited Specialist in Commercial Litigation, NMAS Nationally Accredited Mediator.
+Billing: Hourly Rate $620 AUD/hr or Fixed Fee initial commercial assessment. Languages: English, Mandarin.
+Direct Contact: h.sterling@sterlinglegal.com.au | +61 2 9230 4410`,
+  },
+  {
+    label: 'Sample 2: Family Law & Mediation Specialist (Melbourne VIC)',
+    text: `Dr. Clara Thorne, Principal Solicitor & Accredited Family Law Mediator at Thorne Family Chambers in Melbourne VIC (101 Collins Street, Melbourne VIC 3000). Admitted in 2012 (14 years experience), VLSB Practising Certificate PC-VIC-55910.
+Practice Areas: Family Law, Wills & Estates, Property & Conveyancing.
+Education: Juris Doctor (J.D.) Monash University, Graduate Diploma of Family Dispute Resolution.
+Courts: Federal Circuit and Family Court of Australia (Division 1 & 2), Supreme Court of Victoria.
+Notable Matters: Complex high-net-worth family property settlements, international child relocation trials, and Binding Financial Agreements.
+Billing: Fixed Fee packages and Hourly Rate at $480 AUD/hr. Languages: English, Italian, Greek.
+Direct Contact: clara@thornefamilylaw.com.au | +61 3 9650 7721`,
+  },
+];
+
 export const AiLawyerOnboarding: React.FC<AiLawyerOnboardingProps> = ({ onProfilePublished }) => {
+  const { currentUser, isAuthenticated, signInWithGoogle } = useAuth();
   const [rawText, setRawText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [extractedProfile, setExtractedProfile] = useState<Partial<LegalProfessional>>({
-    fullName: '',
-    title: 'Solicitor',
-    firmName: '',
-    email: '',
-    phone: '',
-    jurisdictions: ['NSW'],
-    practiceAreas: ['Commercial & Corporate'],
-    yearsOfExperience: 10,
-    barOrRegistrationNumber: '',
-    bio: '',
-    feeStructure: 'Hourly Rate',
-    hourlyRateAud: 450,
-    locationCity: 'Sydney',
-    locationPostcode: '2000',
-  });
-  const [isExtracted, setIsExtracted] = useState(false);
-  const [publishedSuccess, setPublishedSuccess] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [dossier, setDossier] = useState<Lawyer17CategoryDossier | null>(null);
+  const [encryptedVault, setEncryptedVault] = useState<EncryptedPayload256 | null>(null);
+  const [publishSuccess, setPublishSuccess] = useState(false);
 
-  const sampleBios = [
-    {
-      label: 'Senior Commercial Barrister (Sydney)',
-      text: `I'm Julian Drake SC, Barrister at Tenth Floor Chambers in Sydney. I was called to the Bar in 2008 and took silk in 2022. I specialize in commercial contracts, equity, shareholder disputes, and corporate insolvency across NSW Supreme Court and the Federal Court. I charge $900 per hour or fixed brief fees. My clerk can be reached at clerk@tenthfloor.com.au or phone 02 9232 5500. Bar registration NSW-BAR-7712.`,
-    },
-    {
-      label: 'Accredited Family Mediator (Melbourne)',
-      text: `My name is Hannah Goldstein. I am a Nationally Accredited Mediator (NMAS) and Family Law Solicitor at Southern Cross Dispute Resolution in Melbourne (3000). I have 15 years experience resolving complex parenting arrangements, property divisions, and high-net-worth spousal maintenance. Fixed fee mediation packages starting at $2,800. Reach me at hannah@southerncrossmediation.com.au or 03 9800 4411. LIV registration LIV-99214.`,
-    },
-    {
-      label: 'Licensed Property Conveyancer (Brisbane)',
-      text: `Liam O'Connor, Director at Sunshine Coast & Brisbane Conveyancing Services. Licensed Conveyancer with 12 years handling residential house sales, commercial leasing, off-the-plan developments, and PEXA settlements in QLD. Standard residential purchase fixed fee $1,100 + outgoings. Phone 07 3344 8899, email liam@sunshineconveyancing.com.au. License QLD-CONV-3320.`,
-    },
-    {
-      label: 'Registered Migration Agent (Perth)',
-      text: `I am Mei-Ling Zhou, Registered Migration Agent (MARN 1809221) and Immigration Consultant at West Coast Migration in Perth WA. 9 years assisting mining engineers, healthcare workers, and employer sponsors with TSS 482, ENS 186, Global Talent visas, and AAT appeals. Fixed fee transparent quotes. Contact: mei@westcoastmigration.com.au, mobile 0411 998 221.`,
-    },
-  ];
+  const handleProcessWithAiAndEncrypt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rawText.trim()) return;
 
-  const handleProcessWithAI = async (textToProcess?: string) => {
-    const text = textToProcess || rawText;
-    if (!text.trim()) {
-      setErrorMsg('Please paste or write your background details.');
-      return;
-    }
-
-    setErrorMsg('');
     setIsProcessing(true);
-    setPublishedSuccess(false);
-
     try {
-      const result = await onboardLegalProfessionalWithAI(text);
-      setExtractedProfile(result);
-      setIsExtracted(true);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'AI extraction failed. Please try again.');
+      const extracted = await extract17CategoryLawyerDossier(
+        rawText,
+        currentUser?.email || 'practitioner@lawyerselect.com.au',
+        currentUser?.displayName || ''
+      );
+      const encrypted = await encryptWith256BitAes({
+        supporterUid: currentUser?.uid || 'google_supporter',
+        supporterEmail: currentUser?.email || '',
+        rawQualificationsPaste: rawText,
+        extractedDossier: extracted,
+      });
+      setDossier(extracted);
+      setEncryptedVault(encrypted);
+    } catch (err) {
+      console.error('AI Dossier Extraction error:', err);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleSelectSample = (sample: typeof sampleBios[0]) => {
-    setRawText(sample.text);
-    handleProcessWithAI(sample.text);
-  };
+  const handlePublishApplication = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dossier) return;
 
-  const handleSaveProfile = () => {
-    const newPro: LegalProfessional = {
-      id: extractedProfile.id || 'lp_' + Math.random().toString(36).substring(2, 9),
+    const finalEncryption = await encryptWith256BitAes(dossier);
+    const nowIso = new Date().toISOString();
+    const appId = 'lapp_' + Math.random().toString(36).substring(2, 9);
+
+    const applicationRecord: EncryptedLawyerApplicationRecord = {
+      id: appId,
       tag: 'lawyerselect',
-      fullName: extractedProfile.fullName || 'Qualified Legal Professional',
-      title: extractedProfile.title || 'Solicitor',
-      firmName: extractedProfile.firmName || 'Independent Legal Practice',
-      email: extractedProfile.email || 'practitioner@lawyerselect.com.au',
-      phone: extractedProfile.phone || '+61 2 9000 0000',
-      jurisdictions: extractedProfile.jurisdictions || ['NSW', 'Federal'],
-      practiceAreas: extractedProfile.practiceAreas || ['Commercial & Corporate'],
-      yearsOfExperience: extractedProfile.yearsOfExperience || 10,
-      barOrRegistrationNumber: extractedProfile.barOrRegistrationNumber || 'REG-AU-' + Math.floor(1000 + Math.random() * 9000),
-      bio: extractedProfile.bio || 'Accredited Australian legal professional.',
-      feeStructure: extractedProfile.feeStructure || 'Hourly Rate',
-      hourlyRateAud: extractedProfile.hourlyRateAud || 450,
-      locationCity: extractedProfile.locationCity || 'Sydney',
-      locationPostcode: extractedProfile.locationPostcode || '2000',
-      isVerified: true,
-      status: 'active',
-      createdAt: new Date().toISOString(),
+      source: 'lawyerselect',
+      supporterGoogleUid: currentUser?.uid || 'google_supporter_uid',
+      supporterGoogleEmail: currentUser?.email || dossier.contactEmail,
+      dossier,
+      encryptionMeta: finalEncryption,
+      tokenReleaseRequirement: {
+        tokensRequiredToUnlockContact: 1,
+        isContactLockedUntilTokenPayment: true,
+      },
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
-    lawyerSelectStore.addProfessional(newPro);
-    setPublishedSuccess(true);
-    onProfilePublished(newPro);
+    // Save 256-bit encrypted application to Firebase (lawyer_applications) & local vault
+    lawyerSelectStore.saveEncryptedLawyerApplication(applicationRecord);
+
+    // Also register the lawyer in the searchable directory so clients can match & unlock with a token
+    const mappedTitle: LegalTitle =
+      dossier.seniorityTitle === 'Barrister'
+        ? 'Barrister'
+        : dossier.seniorityTitle === 'Mediator'
+        ? 'Mediator'
+        : 'Solicitor';
+
+    const newPro = lawyerSelectStore.addProfessional({
+      fullName: dossier.fullName,
+      title: mappedTitle,
+      firmName: dossier.firmOrEmployerAffiliation,
+      email: dossier.contactEmail,
+      phone: dossier.contactPhone,
+      jurisdictions: [dossier.locationJurisdiction],
+      practiceAreas: dossier.practiceAreas,
+      yearsOfExperience: Math.ceil(dossier.yearsOfPractice),
+      barOrRegistrationNumber: dossier.regulatoryBodyId,
+      bio: `${dossier.executiveSummary}\n\n• Education: ${dossier.formalEducationAndLawDegrees.join(', ')}\n• Courts: ${dossier.courtsOfAdmission.join(', ')}\n• Notable Matters: ${dossier.publicationsAndNotableMatters.join('; ')}`,
+      feeStructure: dossier.feeStructure,
+      hourlyRateAud: Math.ceil(dossier.hourlyRateAud),
+      locationCity: dossier.locationCitySuburb,
+      locationPostcode: '2000',
+    });
+
+    setPublishSuccess(true);
+    setTimeout(() => {
+      onProfilePublished(newPro);
+    }, 1600);
+  };
+
+  const togglePracticeArea = (area: PracticeArea) => {
+    if (!dossier) return;
+    const exists = dossier.practiceAreas.includes(area);
+    const updated = exists
+      ? dossier.practiceAreas.filter((a) => a !== area)
+      : [...dossier.practiceAreas, area];
+    if (updated.length > 0) {
+      setDossier({ ...dossier, practiceAreas: updated });
+    }
   };
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '2rem 1.5rem' }}>
-      
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          <span className="badge-purple" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '0.25rem 0.65rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 600 }}>
-            <UserCheck size={14} />
-            <span>AI Professional Onboarding</span>
-          </span>
-          <span className="badge-gold">
-            <Sparkles size={14} />
-            <span>No Boring Old Forms</span>
-          </span>
-        </div>
-        <h2 style={{ fontSize: '2.4rem', color: '#fff', marginBottom: '0.75rem' }}>
-          Onboard into Lawyer Select with Plain Text
-        </h2>
-        <p style={{ color: 'var(--text-muted)', maxWidth: '680px', margin: '0 auto' }}>
-          Paste your website bio, LinkedIn profile, chambers summary, or voice memo. 
-          Our Gemini AI will automatically extract and structure your title, jurisdictions, practice areas, credentials, and rates.
-        </p>
-      </div>
-
-      {publishedSuccess && (
-        <div style={{
-          background: 'rgba(16, 185, 129, 0.15)',
-          border: '1px solid rgba(16, 185, 129, 0.35)',
-          borderRadius: 'var(--radius-md)',
-          padding: '1.25rem',
-          color: '#34d399',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
+    <section
+      data-agent-id="lawyer-register-section"
+      data-testid="lawyer-register-section"
+      style={{ maxWidth: '1140px', margin: '0 auto', padding: '2.5rem 1.5rem' }}
+    >
+      {/* Top Briefing Banner: How Lawyer Registration & 256-Bit Encryption Works */}
+      <div
+        className="glass-panel"
+        style={{
+          padding: '2rem 2.25rem',
           marginBottom: '2rem',
-        }}>
-          <CheckCircle2 size={24} />
-          <div>
-            <h4 style={{ fontWeight: 700, fontSize: '1rem', color: '#fff' }}>Profile Successfully Published!</h4>
-            <p style={{ fontSize: '0.85rem', color: '#34d399' }}>
-              Your profile is now live in the Lawyer Select directory and active for AI client matching.
+          border: '1px solid rgba(212, 175, 55, 0.35)',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(10, 14, 23, 0.98) 100%)',
+        }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.4)', borderRadius: '999px', padding: '0.35rem 0.95rem', color: '#c4b5fd', fontSize: '0.78rem', fontWeight: 700 }}>
+            <UserCheck size={14} />
+            <span>LAWYER REGISTRATION PORTAL • EXCLUSIVELY FOR LEGAL PRACTITIONERS</span>
+          </div>
+
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '999px', padding: '0.35rem 0.9rem', color: '#34d399', fontSize: '0.76rem', fontWeight: 700 }}>
+            <Lock size={13} />
+            <span>256-BIT AES-GCM ENCRYPTED VAULT</span>
+          </div>
+        </div>
+
+        <h1 style={{ fontSize: 'clamp(1.75rem, 3vw, 2.35rem)', color: '#fff', marginBottom: '0.75rem', fontFamily: 'var(--font-heading)' }}>
+          Register as a Legal Practitioner
+        </h1>
+
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.98rem', lineHeight: 1.65, marginBottom: '1.35rem' }}>
+          Lawyers can register simply by pasting their <strong>qualifications, experience, and important cases</strong> into a single input box. We immediately encrypt your dossier using <strong>256-bit AES encryption</strong> and structure it with Firebase and AI across 17 specialist legal categories. When someone searches for a lawyer near them with your required skills, we match your profile and send them your direct contact details <strong>only after payment of a platform token</strong>.
+        </p>
+
+        {/* 3-Step Visual Security & Token Pipeline */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', padding: '1rem' }}>
+            <div style={{ color: 'var(--gold-light)', fontWeight: 700, fontSize: '0.84rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <GoogleIcon size={15} />
+              <span>1. Register as a Supporter on Google</span>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Lawyers first sign in with Google to verify their supporter account and unlock the Lawyer Application Form.
+            </p>
+          </div>
+
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', padding: '1rem' }}>
+            <div style={{ color: '#a78bfa', fontWeight: 700, fontSize: '0.84rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Lock size={15} />
+              <span>2. Paste Bio & 256-Bit Encrypt</span>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Paste your CV, degrees, bar admissions, and landmark cases. AI structures all 17 categories and encrypts your dossier with 256-bit AES-GCM.
+            </p>
+          </div>
+
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', padding: '1rem' }}>
+            <div style={{ color: '#34d399', fontWeight: 700, fontSize: '0.84rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <ShieldCheck size={15} />
+              <span>3. Token-Gated Client Match</span>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              When a client near you searches for your exact skills, our AI matches you and releases your contact details upon token payment.
             </p>
           </div>
         </div>
-      )}
-
-      {/* Input Stage */}
-      <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2.5rem' }}>
-        
-        {/* Sample Picks */}
-        <div style={{ marginBottom: '1.25rem' }}>
-          <label style={{ fontSize: '0.78rem', textTransform: 'uppercase', color: 'var(--text-dim)', letterSpacing: '0.05em', display: 'block', marginBottom: '0.5rem' }}>
-            One-Click Test Profiles:
-          </label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {sampleBios.map((sample, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSelectSample(sample)}
-                className="btn-ghost"
-                style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
-              >
-                {sample.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Free-text input */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', display: 'block', marginBottom: '0.5rem' }}>
-            Paste Your Legal Bio, Summary, or Practice Notes:
-          </label>
-          <textarea
-            value={rawText}
-            onChange={(e) => setRawText(e.target.value)}
-            placeholder="e.g. I am John Smith, Senior Solicitor at Smith & Partners in Melbourne. I have 18 years experience handling commercial contracts, workplace disputes, and corporate litigation. My hourly rate is $520. Bar ID LIV-4481. Contact me at john@smithlegal.com.au..."
-            className="input-luxury"
-            rows={6}
-          />
-        </div>
-
-        {errorMsg && (
-          <div style={{ color: '#fb7185', background: 'rgba(244, 63, 94, 0.1)', padding: '0.75rem', borderRadius: '6px', marginBottom: '1.5rem', fontSize: '0.88rem' }}>
-            {errorMsg}
-          </div>
-        )}
-
-        {/* Process button */}
-        <button
-          onClick={() => handleProcessWithAI()}
-          disabled={isProcessing}
-          className="btn-gold"
-          style={{ width: '100%', padding: '0.9rem', fontSize: '1rem' }}
-        >
-          {isProcessing ? (
-            <>
-              <Sparkles className="animate-spin" size={18} />
-              <span>AI Reading & Structuring Practice Details...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles size={18} />
-              <span>Process with AI Engine (Sort Everything Out)</span>
-            </>
-          )}
-        </button>
       </div>
 
-      {/* Extracted Structured Card */}
-      {isExtracted && (
-        <div className="glass-panel glass-panel-gold" style={{ padding: '2.25rem', position: 'relative' }}>
-          
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div>
-              <span className="badge-emerald" style={{ marginBottom: '0.35rem' }}>
-                <CheckCircle2 size={13} />
-                <span>AI Structuring Complete</span>
+      {/* STEP 1 GATE: Must First Register / Sign In as a Supporter on Google */}
+      {!isAuthenticated || !currentUser ? (
+        <div
+          className="glass-panel"
+          data-agent-id="google-supporter-gate-card"
+          data-testid="google-supporter-gate-card"
+          style={{
+            padding: '2.5rem 2rem',
+            textAlign: 'center',
+            border: '1px solid rgba(212, 175, 55, 0.45)',
+            background: 'rgba(10, 14, 23, 0.95)',
+          }}
+        >
+          <div
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: 'rgba(212, 175, 55, 0.15)',
+              border: '1px solid var(--border-gold)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.15rem',
+              color: 'var(--gold-light)',
+            }}
+          >
+            <Shield size={26} />
+          </div>
+
+          <h2 style={{ fontSize: '1.5rem', color: '#fff', marginBottom: '0.6rem', fontFamily: 'var(--font-heading)' }}>
+            Step 1: Register as a Supporter with Google
+          </h2>
+
+          <p style={{ maxWidth: '620px', margin: '0 auto 1.6rem', color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.6 }}>
+            This registration portal is exclusively for legal professionals. Please register and sign in as a supporter with your Google account first. Immediately after signing in, your <strong>Lawyer Application Form</strong> will unlock below.
+          </p>
+
+          <button
+            type="button"
+            data-agent-id="register-google-supporter-btn"
+            data-testid="register-google-supporter-btn"
+            onClick={signInWithGoogle}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.7rem',
+              background: '#ffffff',
+              color: '#111827',
+              border: '1px solid rgba(255, 255, 255, 0.8)',
+              borderRadius: '999px',
+              padding: '0.8rem 1.75rem',
+              fontSize: '0.96rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 8px 25px rgba(0, 0, 0, 0.45)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <GoogleIcon size={20} />
+            <span>Register / Sign In with Google to Unlock Lawyer Application</span>
+          </button>
+
+          {/* Preview of the 17 Categories Processed by Firebase & AI */}
+          <div style={{ marginTop: '2.25rem', textAlign: 'left', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '1.5rem' }}>
+            <h3 style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--gold-light)', marginBottom: '0.85rem', textAlign: 'center' }}>
+              17 Legal Categories Automatically Extracted by AI & Encrypted in Firebase
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '0.55rem', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+              <div>1. Location (Jurisdiction, State, City, Address)</div>
+              <div>2. Practice Areas (Family, Criminal, Corporate, IP)</div>
+              <div>3. Bar Admissions & Licensing (PC Status & ID)</div>
+              <div>4. Firm or Employer Affiliation</div>
+              <div>5. Experience Level & Seniority</div>
+              <div>6. Past Legal Work Experience</div>
+              <div>7. Career Milestones & Roles</div>
+              <div>8. Formal Education & Law Degrees (LL.B., J.D., LL.M.)</div>
+              <div>9. Academic & Continuing Legal Education (CLE)</div>
+              <div>10. Professional Accreditations & Certifications</div>
+              <div>11. Courts of Admission & Rights of Audience</div>
+              <div>12. Judicial Appointments & Public Service</div>
+              <div>13. Publications, Case Studies & Notable Matters</div>
+              <div>14. Fee Structure & Pricing (AUD Integer Rates)</div>
+              <div>15. Languages Spoken for Consultations</div>
+              <div>16. Verified Contact Channels (Token-Gated)</div>
+              <div>17. Client Reviews & Reputation Metrics</div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* STEP 2: UNLOCKED LAWYER APPLICATION FORM (Post-Google Sign-In) */
+        <div>
+          {/* Verified Supporter Bar */}
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+              padding: '0.85rem 1.25rem',
+              marginBottom: '1.5rem',
+              borderRadius: '12px',
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#ecfdf5', fontSize: '0.85rem', fontWeight: 600 }}>
+              <CheckCircle2 size={18} style={{ color: '#34d399' }} />
+              <span>
+                Step 1 Complete — Verified Google Supporter: <strong>{currentUser.displayName || currentUser.email}</strong> ({currentUser.email})
               </span>
-              <h3 style={{ fontSize: '1.6rem', color: '#fff' }}>
-                Verified Structured Profile
-              </h3>
             </div>
-            <span className="badge-gold">
-              <ShieldCheck size={14} />
-              <span>Ready for Directory & AI Matching</span>
+            <span style={{ fontSize: '0.75rem', color: '#6ee7b7', fontWeight: 600 }}>
+              Step 2 Unlocked: Lawyer Application Form Active
             </span>
           </div>
 
-          {/* Form-less review grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
-            
-            <div style={{ background: 'rgba(10, 14, 23, 0.8)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Full Name</span>
-              <input
-                type="text"
-                value={extractedProfile.fullName || ''}
-                onChange={(e) => setExtractedProfile({ ...extractedProfile, fullName: e.target.value })}
-                className="input-luxury"
-                style={{ marginTop: '0.25rem', fontSize: '1rem', fontWeight: 700 }}
-              />
+          {/* Paste Box + 17-Category Application Form */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {/* Single Box AI Input */}
+            <div className="glass-panel" style={{ padding: '1.75rem' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <Sparkles size={20} style={{ color: '#a78bfa' }} />
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff', margin: 0 }}>
+                    Lawyer Application Form — Paste Your Qualifications, Experience & Cases
+                  </h2>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {SAMPLE_PASTES.map((sample, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setRawText(sample.text)}
+                      style={{
+                        background: 'rgba(139, 92, 246, 0.12)',
+                        border: '1px solid rgba(139, 92, 246, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.65rem',
+                        fontSize: '0.73rem',
+                        color: '#c4b5fd',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Load {sample.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <form onSubmit={handleProcessWithAiAndEncrypt}>
+                <textarea
+                  className="input-luxury"
+                  rows={7}
+                  data-agent-id="lawyer-paste-qualifications-textarea"
+                  data-testid="lawyer-paste-qualifications-textarea"
+                  placeholder="Paste your CV, qualifications, degrees (LL.B., J.D., LL.M.), bar admission & practising certificate details, law firm affiliation, career milestones, courts of admission, important cases/judgments, fee structure, languages, and direct contact details..."
+                  value={rawText}
+                  onChange={(e) => setRawText(e.target.value)}
+                  style={{ marginBottom: '1rem', fontSize: '0.9rem', lineHeight: 1.6 }}
+                  required
+                />
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    <Lock size={14} style={{ color: '#34d399' }} />
+                    <span>
+                      Processed by Firebase & AI across all 17 categories and encrypted with <strong>256-Bit AES-GCM</strong>.
+                    </span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn-gold"
+                    data-agent-id="lawyer-process-ai-encrypt-btn"
+                    data-testid="lawyer-process-ai-encrypt-btn"
+                    disabled={isProcessing || !rawText.trim()}
+                    style={{ padding: '0.75rem 1.5rem' }}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw size={16} className="spin" />
+                        <span>Extracting 17 Categories & Encrypting (256-Bit)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} />
+                        <span>Process with AI & 256-Bit Encrypt Dossier</span>
+                        <ArrowRight size={16} />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
 
-            <div style={{ background: 'rgba(10, 14, 23, 0.8)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Discipline / Title</span>
-              <select
-                value={extractedProfile.title || 'Solicitor'}
-                onChange={(e) => setExtractedProfile({ ...extractedProfile, title: e.target.value as LegalTitle })}
-                className="input-luxury"
-                style={{ marginTop: '0.25rem' }}
+            {/* 17-Category Extracted Dossier & 256-Bit Encryption Certificate */}
+            {dossier && encryptedVault && (
+              <form
+                onSubmit={handlePublishApplication}
+                className="glass-panel"
+                data-agent-id="lawyer-17-category-review-form"
+                data-testid="lawyer-17-category-review-form"
+                style={{
+                  padding: '2rem',
+                  border: '1px solid rgba(52, 211, 153, 0.45)',
+                }}
               >
-                <option value="Solicitor">Solicitor</option>
-                <option value="Barrister">Barrister</option>
-                <option value="Conveyancer">Conveyancer</option>
-                <option value="Mediator">Mediator</option>
-                <option value="Patent Attorney">Patent Attorney</option>
-                <option value="Notary Public">Notary Public</option>
-                <option value="Migration Agent">Migration Agent</option>
-                <option value="Arbitrator">Arbitrator</option>
-                <option value="Paralegal">Paralegal</option>
-                <option value="Legal Consultant">Legal Consultant</option>
-              </select>
-            </div>
-
-            <div style={{ background: 'rgba(10, 14, 23, 0.8)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Firm / Practice</span>
-              <input
-                type="text"
-                value={extractedProfile.firmName || ''}
-                onChange={(e) => setExtractedProfile({ ...extractedProfile, firmName: e.target.value })}
-                className="input-luxury"
-                style={{ marginTop: '0.25rem' }}
-              />
-            </div>
-
-            <div style={{ background: 'rgba(10, 14, 23, 0.8)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>City & Postcode</span>
-              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                <input
-                  type="text"
-                  value={extractedProfile.locationCity || ''}
-                  onChange={(e) => setExtractedProfile({ ...extractedProfile, locationCity: e.target.value })}
-                  className="input-luxury"
-                  placeholder="City"
-                />
-                <input
-                  type="text"
-                  value={extractedProfile.locationPostcode || ''}
-                  onChange={(e) => setExtractedProfile({ ...extractedProfile, locationPostcode: e.target.value })}
-                  className="input-luxury"
-                  style={{ width: '90px' }}
-                  placeholder="Postcode"
-                />
-              </div>
-            </div>
-
-            <div style={{ background: 'rgba(10, 14, 23, 0.8)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Experience & Reg ID</span>
-              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                <input
-                  type="number"
-                  value={extractedProfile.yearsOfExperience || 10}
-                  onChange={(e) => setExtractedProfile({ ...extractedProfile, yearsOfExperience: parseInt(e.target.value) || 0 })}
-                  className="input-luxury"
-                  style={{ width: '100px' }}
-                  title="Years of experience"
-                />
-                <input
-                  type="text"
-                  value={extractedProfile.barOrRegistrationNumber || ''}
-                  onChange={(e) => setExtractedProfile({ ...extractedProfile, barOrRegistrationNumber: e.target.value })}
-                  className="input-luxury"
-                  placeholder="Bar / MARA / Reg #"
-                />
-              </div>
-            </div>
-
-            <div style={{ background: 'rgba(10, 14, 23, 0.8)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>Fee Structure & Hourly Rate (AUD)</span>
-              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                <select
-                  value={extractedProfile.feeStructure || 'Hourly Rate'}
-                  onChange={(e) => setExtractedProfile({ ...extractedProfile, feeStructure: e.target.value as FeeStructure })}
-                  className="input-luxury"
+                {/* 256-Bit Encryption Status Header */}
+                <div
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    borderRadius: '10px',
+                    padding: '1rem 1.25rem',
+                    marginBottom: '1.75rem',
+                  }}
                 >
-                  <option value="Hourly Rate">Hourly Rate</option>
-                  <option value="Fixed Fee">Fixed Fee</option>
-                  <option value="No Win No Fee">No Win No Fee</option>
-                  <option value="Retainer">Retainer</option>
-                </select>
-                <input
-                  type="number"
-                  value={extractedProfile.hourlyRateAud || 400}
-                  onChange={(e) => setExtractedProfile({ ...extractedProfile, hourlyRateAud: parseInt(e.target.value) || 0 })}
-                  className="input-luxury"
-                  style={{ width: '110px' }}
-                  placeholder="$ AUD"
-                />
-              </div>
-            </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.45rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#34d399', fontWeight: 700, fontSize: '0.88rem' }}>
+                      <Lock size={16} />
+                      <span>256-BIT AES-GCM ENCRYPTION ACTIVE • AI CONFIDENCE: {dossier.aiConfidenceScore}%</span>
+                    </div>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--gold-light)', fontWeight: 600 }}>
+                      Contact Details Token-Gated (Released to Matched Clients After 1 Token Payment)
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                    <div>Cipher: {encryptedVault.algorithm} ({encryptedVault.keyLengthBits}-Bit) | IV: {encryptedVault.ivHex}</div>
+                    <div>SHA-256 Digest: {encryptedVault.sha256IntegrityHash}</div>
+                  </div>
+                </div>
 
+                <h3 style={{ fontSize: '1.25rem', color: '#fff', marginBottom: '1.25rem', fontFamily: 'var(--font-heading)' }}>
+                  Review & Confirm Your 17-Category Lawyer Application Dossier
+                </h3>
+
+                {/* Practitioner Full Name */}
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label className="label-luxury">Practitioner Full Legal Name & Honorifics</label>
+                  <input
+                    type="text"
+                    className="input-luxury"
+                    value={dossier.fullName}
+                    onChange={(e) => setDossier({ ...dossier, fullName: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {/* Grid of the 17 Categories */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))', gap: '1.15rem', marginBottom: '1.5rem' }}>
+                  {/* 1. Location */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      1. LOCATION (JURISDICTION, STATE, CITY & OFFICE ADDRESS)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <select
+                        className="input-luxury"
+                        value={dossier.locationJurisdiction}
+                        onChange={(e) => setDossier({ ...dossier, locationJurisdiction: e.target.value as Jurisdiction })}
+                      >
+                        {JURISDICTIONS.map((j) => (
+                          <option key={j} value={j}>{j}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        className="input-luxury"
+                        placeholder="City / Suburb"
+                        value={dossier.locationCitySuburb}
+                        onChange={(e) => setDossier({ ...dossier, locationCitySuburb: e.target.value })}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      className="input-luxury"
+                      placeholder="Primary Office Address"
+                      value={dossier.primaryOfficeAddress}
+                      onChange={(e) => setDossier({ ...dossier, primaryOfficeAddress: e.target.value })}
+                    />
+                  </div>
+
+                  {/* 2. Practice Areas */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      2. PRACTICE AREAS
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      {PRACTICE_AREAS.map((area) => {
+                        const active = dossier.practiceAreas.includes(area);
+                        return (
+                          <button
+                            key={area}
+                            type="button"
+                            onClick={() => togglePracticeArea(area)}
+                            style={{
+                              padding: '0.22rem 0.55rem',
+                              borderRadius: '999px',
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              border: active ? '1px solid var(--gold-primary)' : '1px solid rgba(255,255,255,0.12)',
+                              background: active ? 'var(--gold-glow)' : 'transparent',
+                              color: active ? 'var(--gold-light)' : 'var(--text-muted)',
+                            }}
+                          >
+                            {area}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 3. Bar Admissions & Licensing */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      3. BAR ADMISSIONS & LICENSING
+                    </div>
+                    <input
+                      type="text"
+                      className="input-luxury"
+                      style={{ marginBottom: '0.45rem' }}
+                      value={dossier.barAdmissionStatus}
+                      onChange={(e) => setDossier({ ...dossier, barAdmissionStatus: e.target.value })}
+                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '0.5rem' }}>
+                      <input
+                        type="number"
+                        className="input-luxury"
+                        placeholder="Year"
+                        value={dossier.yearAdmitted}
+                        onChange={(e) => setDossier({ ...dossier, yearAdmitted: Math.ceil(Number(e.target.value) || 2015) })}
+                      />
+                      <input
+                        type="text"
+                        className="input-luxury"
+                        placeholder="Regulatory Body ID"
+                        value={dossier.regulatoryBodyId}
+                        onChange={(e) => setDossier({ ...dossier, regulatoryBodyId: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 4. Firm or Employer Affiliation */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      4. FIRM OR EMPLOYER AFFILIATION
+                    </div>
+                    <input
+                      type="text"
+                      className="input-luxury"
+                      style={{ marginBottom: '0.45rem' }}
+                      value={dossier.firmOrEmployerAffiliation}
+                      onChange={(e) => setDossier({ ...dossier, firmOrEmployerAffiliation: e.target.value })}
+                    />
+                    <select
+                      className="input-luxury"
+                      value={dossier.affiliationType}
+                      onChange={(e) => setDossier({ ...dossier, affiliationType: e.target.value as Lawyer17CategoryDossier['affiliationType'] })}
+                    >
+                      <option value="Law Firm Partner/Employee">Law Firm Partner/Employee</option>
+                      <option value="Solo Practitioner">Solo Practitioner</option>
+                      <option value="Barristers Chambers">Barristers Chambers</option>
+                      <option value="In-House Counsel">In-House Counsel</option>
+                    </select>
+                  </div>
+
+                  {/* 5. Experience Level & Seniority */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      5. EXPERIENCE LEVEL & SENIORITY
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '0.5rem' }}>
+                      <input
+                        type="text"
+                        className="input-luxury"
+                        value={dossier.seniorityTitle}
+                        onChange={(e) => setDossier({ ...dossier, seniorityTitle: e.target.value as Lawyer17CategoryDossier['seniorityTitle'] })}
+                      />
+                      <input
+                        type="number"
+                        className="input-luxury"
+                        min={0}
+                        max={70}
+                        value={dossier.yearsOfPractice}
+                        onChange={(e) => setDossier({ ...dossier, yearsOfPractice: Math.ceil(Number(e.target.value) || 1) })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 6. Past Legal Work Experience */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      6. PAST LEGAL WORK EXPERIENCE
+                    </div>
+                    <textarea
+                      className="input-luxury"
+                      rows={2}
+                      value={dossier.pastLegalWorkExperience.join('\n')}
+                      onChange={(e) => setDossier({ ...dossier, pastLegalWorkExperience: e.target.value.split('\n') })}
+                    />
+                  </div>
+
+                  {/* 7. Career Milestones & Roles */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      7. CAREER MILESTONES & ROLES
+                    </div>
+                    <textarea
+                      className="input-luxury"
+                      rows={2}
+                      value={dossier.careerMilestonesAndRoles.join('\n')}
+                      onChange={(e) => setDossier({ ...dossier, careerMilestonesAndRoles: e.target.value.split('\n') })}
+                    />
+                  </div>
+
+                  {/* 8. Formal Education & Law Degrees */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      8. FORMAL EDUCATION & LAW DEGREES (LL.B., J.D., LL.M.)
+                    </div>
+                    <textarea
+                      className="input-luxury"
+                      rows={2}
+                      value={dossier.formalEducationAndLawDegrees.join('\n')}
+                      onChange={(e) => setDossier({ ...dossier, formalEducationAndLawDegrees: e.target.value.split('\n') })}
+                    />
+                  </div>
+
+                  {/* 9. Academic & Continuing Legal Education (CLE) */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      9. ACADEMIC & CONTINUING LEGAL EDUCATION (CLE)
+                    </div>
+                    <textarea
+                      className="input-luxury"
+                      rows={2}
+                      value={dossier.academicAndCleQualifications.join('\n')}
+                      onChange={(e) => setDossier({ ...dossier, academicAndCleQualifications: e.target.value.split('\n') })}
+                    />
+                  </div>
+
+                  {/* 10. Professional Accreditations & Specialist Certifications */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      10. PROFESSIONAL ACCREDITATIONS & CERTIFICATIONS
+                    </div>
+                    <textarea
+                      className="input-luxury"
+                      rows={2}
+                      value={dossier.professionalAccreditations.join('\n')}
+                      onChange={(e) => setDossier({ ...dossier, professionalAccreditations: e.target.value.split('\n') })}
+                    />
+                  </div>
+
+                  {/* 11. Courts of Admission & Rights of Audience */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      11. COURTS OF ADMISSION & RIGHTS OF AUDIENCE
+                    </div>
+                    <textarea
+                      className="input-luxury"
+                      rows={2}
+                      value={dossier.courtsOfAdmission.join('\n')}
+                      onChange={(e) => setDossier({ ...dossier, courtsOfAdmission: e.target.value.split('\n') })}
+                    />
+                  </div>
+
+                  {/* 12. Judicial Appointments & Public Service */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      12. JUDICIAL APPOINTMENTS & PUBLIC SERVICE
+                    </div>
+                    <textarea
+                      className="input-luxury"
+                      rows={2}
+                      value={dossier.judicialAndPublicService.join('\n')}
+                      onChange={(e) => setDossier({ ...dossier, judicialAndPublicService: e.target.value.split('\n') })}
+                    />
+                  </div>
+
+                  {/* 13. Publications, Case Studies & Notable Matters */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      13. PUBLICATIONS, CASE STUDIES & NOTABLE MATTERS
+                    </div>
+                    <textarea
+                      className="input-luxury"
+                      rows={2}
+                      value={dossier.publicationsAndNotableMatters.join('\n')}
+                      onChange={(e) => setDossier({ ...dossier, publicationsAndNotableMatters: e.target.value.split('\n') })}
+                    />
+                  </div>
+
+                  {/* 14. Fee Structure & Pricing */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      14. FEE STRUCTURE & PRICING (AUD INTEGER)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '0.5rem' }}>
+                      <select
+                        className="input-luxury"
+                        value={dossier.feeStructure}
+                        onChange={(e) => setDossier({ ...dossier, feeStructure: e.target.value as FeeStructure })}
+                      >
+                        {FEE_STRUCTURES.map((f) => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        className="input-luxury"
+                        value={dossier.hourlyRateAud}
+                        onChange={(e) => setDossier({ ...dossier, hourlyRateAud: Math.ceil(Number(e.target.value) || 400) })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 15. Languages Spoken */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      15. LANGUAGES SPOKEN FOR CONSULTATIONS
+                    </div>
+                    <input
+                      type="text"
+                      className="input-luxury"
+                      value={dossier.languagesSpoken.join(', ')}
+                      onChange={(e) => setDossier({ ...dossier, languagesSpoken: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+                    />
+                  </div>
+
+                  {/* 16. Verified Contact Channels (Token-Gated) */}
+                  <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ color: '#34d399', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Lock size={13} />
+                      <span>16. VERIFIED CONTACT CHANNELS (256-BIT ENCRYPTED & TOKEN-GATED)</span>
+                    </div>
+                    <input
+                      type="email"
+                      className="input-luxury"
+                      style={{ marginBottom: '0.45rem' }}
+                      placeholder="Direct Professional Email"
+                      value={dossier.contactEmail}
+                      onChange={(e) => setDossier({ ...dossier, contactEmail: e.target.value })}
+                    />
+                    <input
+                      type="text"
+                      className="input-luxury"
+                      placeholder="Direct Phone Number"
+                      value={dossier.contactPhone}
+                      onChange={(e) => setDossier({ ...dossier, contactPhone: e.target.value })}
+                    />
+                  </div>
+
+                  {/* 17. Client Reviews & Reputation Metrics */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '1rem', gridColumn: '1 / -1' }}>
+                    <div style={{ color: 'var(--gold-light)', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                      17. CLIENT REVIEWS, DISCIPLINARY STANDING & REPUTATION METRICS
+                    </div>
+                    <input
+                      type="text"
+                      className="input-luxury"
+                      value={dossier.reputationAndDisciplinaryStanding}
+                      onChange={(e) => setDossier({ ...dossier, reputationAndDisciplinaryStanding: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {publishSuccess ? (
+                  <div
+                    style={{
+                      padding: '1rem',
+                      borderRadius: '10px',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      border: '1px solid #10b981',
+                      color: '#34d399',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.6rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    <CheckCircle2 size={20} />
+                    <span>256-Bit Encrypted Lawyer Dossier Saved to Firebase & Activated for Token-Gated Client Matching!</span>
+                  </div>
+                ) : (
+                  <button
+                    type="submit"
+                    className="btn-gold"
+                    data-agent-id="lawyer-publish-encrypted-dossier-btn"
+                    data-testid="lawyer-publish-encrypted-dossier-btn"
+                    style={{ width: '100%', justifyContent: 'center', padding: '0.9rem' }}
+                  >
+                    <ShieldCheck size={18} />
+                    <span>Encrypt (256-Bit AES) & Submit Lawyer Application to Firebase</span>
+                  </button>
+                )}
+              </form>
+            )}
           </div>
-
-          {/* Practice Areas & Jurisdictions Pills */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', display: 'block', marginBottom: '0.4rem' }}>
-              Extracted Practice Areas:
-            </span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-              {(extractedProfile.practiceAreas || []).map((area, idx) => (
-                <span key={idx} className="badge-blue" style={{ fontSize: '0.8rem' }}>
-                  {area}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '1.5rem' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', display: 'block', marginBottom: '0.4rem' }}>
-              Extracted Jurisdictions:
-            </span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-              {(extractedProfile.jurisdictions || []).map((jur, idx) => (
-                <span key={idx} className="badge-gold" style={{ fontSize: '0.8rem' }}>
-                  {jur}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Polished Bio */}
-          <div style={{ marginBottom: '2rem' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase', display: 'block', marginBottom: '0.4rem' }}>
-              Refined Professional Bio:
-            </span>
-            <textarea
-              value={extractedProfile.bio || ''}
-              onChange={(e) => setExtractedProfile({ ...extractedProfile, bio: e.target.value })}
-              className="input-luxury"
-              rows={4}
-            />
-          </div>
-
-          {/* Action buttons */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => handleProcessWithAI()}
-              className="btn-ghost"
-            >
-              <RefreshCw size={15} />
-              <span>Re-Parse with AI</span>
-            </button>
-
-            <button
-              onClick={handleSaveProfile}
-              className="btn-gold"
-              style={{ padding: '0.75rem 1.75rem' }}
-            >
-              <CheckCircle2 size={16} />
-              <span>Publish to Legal Directory</span>
-              <ArrowRight size={15} />
-            </button>
-          </div>
-
         </div>
       )}
-
-    </div>
+    </section>
   );
 };

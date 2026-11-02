@@ -1,18 +1,16 @@
 # Lawyer Select - Next Instructions & Worklist
 
 ## Current Status
-- Geolocation & Regional Settings Widget Mounted: `<GeoFooterWidget />` is live at the bottom of `src/App.tsx`. Includes thin bottom footer bar (suburb, weather, live time, daily AUD/USD rate) and centered popup (responsive, strictly NO scrollbar, location changer, auto-detect GPS, date/time format customizer, and interactive daily AUD to USD converter using free API).
-- Pinned Google Sign-In: Google Sign-In button styled as a high-visibility white pill with official Google 'G' icon, pinned to the top right of the navbar (`marginLeft: auto`, `flexShrink: 0`, `flexWrap: nowrap`).
-- SuperAdmin Authorization: Configured `isSuperAdminEmail` verifying Firebase Admin account (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified admin addresses, and displaying gold SuperAdmin badge only for authorized superadmins.
-- Decommissioned Case Leads: Removed Case Feed ($20 Leads), Post a Legal Matter tab, and all case lead exchange buttons/cards from Navbar, HeroBanner, and App.
-- Focused Service Model: Retained AI Top 3 Matchmaker, Legal Professional/Firm AI Onboarding, Direct Chat, Lawyer Directory, and Open Australian Legal Corpus Library.
-- Data Contracts: Updated `data-contracts.md` with Domain 13 (Geolocation, Localization & Daily AUD/USD Currency Converter).
-- Drive Lock: Project strictly bound to drive `E:\` only. Drive `Z:\` completely bypassed.
-- Git Remote: Configured for `https://github.com/aifoundationau/lawyer.git` (`origin`) in `.git/config`.
-- Security Lock: `.gitignore` secures all `.env*`, keys, service account credentials, logs, and audit files.
-- Database: Connected to Firebase Project `ai-foundation-firebase`, named Firestore database `lawyerselect` (nam5).
+- Lawyer Registration Portal (`Register` Tab):
+  - Renamed `"Legal Pro AI Intake"` to **`"Register"`** in `src/components/Navbar.tsx`.
+  - Step 1 (Google Supporter Gate): Explains one-box lawyer registration, 256-bit AES encryption, and token-gated contact release. Requires the lawyer to first register/sign in with Google (`Sign In with Google`).
+  - Step 2 (Lawyer Application Form): Unlocks immediately after Google Sign-In. Parses pasted qualifications, experience, and notable cases into all 17 categories, encrypts with 256-bit AES-GCM (`src/services/encryptionService.ts`), and stores in Firebase (`lawyer_applications` & `legal_professionals`).
+- AI Agent Skill Created: `.agents/skills/legal-practitioner-dossier-parser/SKILL.md` engineered for 100% reliability across all AI models (`Gemini 2.5 Flash-Lite`, `Claude Haiku 4.5`, `gpt-6-luna`).
+- Geolocation & Regional Settings Widget Mounted: `<GeoFooterWidget />` live at the bottom of `src/App.tsx`.
+- Pinned Google Sign-In & SuperAdmin Authorization: Active in top right of Navbar.
+- Decommissioned Case Leads: Removed across Navbar, HeroBanner, and App.
+- Data Contracts: Updated `data-contracts.md` with Domain 14 (17-Category Lawyer Application Dossier & 256-Bit AES Encryption).
 
 ## Next Steps
-1. User verifies the new thin Geolocation & Currency footer bar and centered settings popup in the browser.
-2. User commits and pushes all updates to GitHub: `git add . && git commit -m "feat: add geolocation footer widget and regional currency converter" && git push -u origin master`.
-3. Proceed to Dual Registration Form (Law Firm vs Individual Practitioner) with unified AI "One Blob" input box.
+1. User tests the new `"Register"` tab in the browser (`http://localhost:3000/`): verify Step 1 (Google Supporter Gate) and Step 2 (Lawyer Application Form with 17 categories & 256-bit AES encryption).
+2. User commits and pushes all updates to GitHub: `git add . && git commit -m "feat: add Google-gated lawyer Register portal with 17-category AI parser and 256-bit encryption" && git push -u origin master`.

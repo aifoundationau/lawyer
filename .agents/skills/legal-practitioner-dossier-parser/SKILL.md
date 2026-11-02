@@ -43,3 +43,4 @@ Rules:
 - Round all numeric values up to the nearest whole integer (zero decimals).
 - If a category is not mentioned in the input text, populate string fields with "Pending Verification" and array fields with an appropriate default based on context.
 ```
+

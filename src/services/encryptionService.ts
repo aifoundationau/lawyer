@@ -89,3 +89,4 @@ export async function encryptWith256BitAes(data: unknown,contextSalt = 'lawyerse
     encryptedAt: new Date().toISOString(),
   };
 }
+

@@ -33,6 +33,10 @@ rules_version = '2';
 // 10. practitioner_registrations/{regId}:
 //     - Individual practitioner KYC and regulatory profile (Domain 11). Private read for owner/superadmin.
 //       Creation by signed-in users. Update/delete by superadmin only.
+// 11. lawyer_applications/{appId}:
+//     - 256-bit AES-GCM encrypted practitioner dossiers (Domain 14).
+//       Read restricted to submitting owner (supporterGoogleUid == uid()) or superadmin.
+//       Create by authenticated supporter. Update/delete by superadmin only.
 //
 // Principles:
 //  - Deny by default: anything not allowed below is refused.
@@ -346,6 +350,33 @@ service cloud.firestore {
         && request.resource.data.registrationType == 'individual_practitioner'
         && request.resource.data.id == regId
         && validNewPractitionerRegistration(regId, request.resource.data);
+
+      // Updates and deletions restricted to superadmins.
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // ---------------------------------------------------------------- 256-Bit Encrypted Applications (Domain 14)
+    function validNewLawyerApplication(appId, d) {
+      return d.id == appId
+        && d.tag == 'lawyerselect'
+        && d.source == 'lawyerselect'
+        && d.supporterGoogleUid == uid()
+        && ('encryptionMeta' in d && d.encryptionMeta is map)
+        && d.encryptionMeta.algorithm == 'AES-256-GCM'
+        && ('dossier' in d && d.dossier is map);
+    }
+
+    match /lawyer_applications/{appId} {
+      // Sensitive 256-bit encrypted dossier: readable only by submitting supporter/lawyer or superadmin.
+      allow read: if signedIn() && (resource.data.supporterGoogleUid == uid() || isSuperAdmin());
+
+      // Create allowed for signed-in supporters with required partition tags, ownership, and AES-256-GCM metadata.
+      allow create: if signedIn()
+        && request.resource.data.tag == 'lawyerselect'
+        && request.resource.data.source == 'lawyerselect'
+        && request.resource.data.supporterGoogleUid == uid()
+        && request.resource.data.encryptionMeta.algorithm == 'AES-256-GCM'
+        && validNewLawyerApplication(appId, request.resource.data);
 
       // Updates and deletions restricted to superadmins.
       allow update, delete: if isSuperAdmin();

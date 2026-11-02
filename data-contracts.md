@@ -250,6 +250,34 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 
 ---
 
+### Domain 12: SuperAdmin Authentication & Google Identity Provider
+*Authentication Mechanism*: Google OAuth 2.0 via Firebase Client SDK / Firebase Auth (`signInWithPopup(auth, provider)`).
+
+| Identity Class | Authority Criterion | Role Claim | Capabilities |
+| :--- | :--- | :--- | :--- |
+| **SuperAdmin** | Firebase Admin service email (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified bootstrap admin emails (`admin@lawyerselect.com.au`, `superadmin@lawyerselect.com.au`, `support@aifoundation.net.au`), or verified token custom claims (`superadmin: true`). | `superadmin` | Catalog item CRUD, token price setting, platform settings override, manual approval of law firms & individual practitioners, dispute & refund processing. |
+| **Standard User / Client** | Any standard Google account authenticated via popup. | `client` | Inquiries, AI matching, case posting, chat, and review. |
+| **Guest / Anonymous** | Unauthenticated visitor. Clean UI with zero mock badges. Google login icon displayed in far right header. | `guest` | Read-only directory and legal corpus explorer access. |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SuperAdminIdentityContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["uid", "email", "role", "isSuperAdmin"],
+  "properties": {
+    "uid": { "type": "string" },
+    "email": { "type": "string", "format": "email" },
+    "displayName": { "type": "string" },
+    "role": { "type": "string", "enum": ["superadmin", "lawyer", "client", "guest"] },
+    "photoURL": { "type": "string" },
+    "isSuperAdmin": { "type": "boolean" }
+  }
+}
+```
+---
+
 ### Domain 7: Products & Services Catalog (`products_and_services`)
 *Ingestion Channels*: SuperAdmin Item CRUD (`/api/admin/products`).  
 *Description*: All items, lead types, and platform features sold on Lawyer Select. SuperAdmin sets the token amount for every product/service.
@@ -313,6 +341,34 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 }
 ```
 
+---
+
+### Domain 12: SuperAdmin Authentication & Google Identity Provider
+*Authentication Mechanism*: Google OAuth 2.0 via Firebase Client SDK / Firebase Auth (`signInWithPopup(auth, provider)`).
+
+| Identity Class | Authority Criterion | Role Claim | Capabilities |
+| :--- | :--- | :--- | :--- |
+| **SuperAdmin** | Firebase Admin service email (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified bootstrap admin emails (`admin@lawyerselect.com.au`, `superadmin@lawyerselect.com.au`, `support@aifoundation.net.au`), or verified token custom claims (`superadmin: true`). | `superadmin` | Catalog item CRUD, token price setting, platform settings override, manual approval of law firms & individual practitioners, dispute & refund processing. |
+| **Standard User / Client** | Any standard Google account authenticated via popup. | `client` | Inquiries, AI matching, case posting, chat, and review. |
+| **Guest / Anonymous** | Unauthenticated visitor. Clean UI with zero mock badges. Google login icon displayed in far right header. | `guest` | Read-only directory and legal corpus explorer access. |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SuperAdminIdentityContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["uid", "email", "role", "isSuperAdmin"],
+  "properties": {
+    "uid": { "type": "string" },
+    "email": { "type": "string", "format": "email" },
+    "displayName": { "type": "string" },
+    "role": { "type": "string", "enum": ["superadmin", "lawyer", "client", "guest"] },
+    "photoURL": { "type": "string" },
+    "isSuperAdmin": { "type": "boolean" }
+  }
+}
+```
 ---
 
 ### Domain 8: SuperAdmin Direct Inquiries & Refund Requests (`superadmin_messages`)
@@ -381,6 +437,34 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 }
 ```
 
+---
+
+### Domain 12: SuperAdmin Authentication & Google Identity Provider
+*Authentication Mechanism*: Google OAuth 2.0 via Firebase Client SDK / Firebase Auth (`signInWithPopup(auth, provider)`).
+
+| Identity Class | Authority Criterion | Role Claim | Capabilities |
+| :--- | :--- | :--- | :--- |
+| **SuperAdmin** | Firebase Admin service email (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified bootstrap admin emails (`admin@lawyerselect.com.au`, `superadmin@lawyerselect.com.au`, `support@aifoundation.net.au`), or verified token custom claims (`superadmin: true`). | `superadmin` | Catalog item CRUD, token price setting, platform settings override, manual approval of law firms & individual practitioners, dispute & refund processing. |
+| **Standard User / Client** | Any standard Google account authenticated via popup. | `client` | Inquiries, AI matching, case posting, chat, and review. |
+| **Guest / Anonymous** | Unauthenticated visitor. Clean UI with zero mock badges. Google login icon displayed in far right header. | `guest` | Read-only directory and legal corpus explorer access. |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SuperAdminIdentityContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["uid", "email", "role", "isSuperAdmin"],
+  "properties": {
+    "uid": { "type": "string" },
+    "email": { "type": "string", "format": "email" },
+    "displayName": { "type": "string" },
+    "role": { "type": "string", "enum": ["superadmin", "lawyer", "client", "guest"] },
+    "photoURL": { "type": "string" },
+    "isSuperAdmin": { "type": "boolean" }
+  }
+}
+```
 ---
 
 ### Domain 9: Terms of Service & Token Economy Disclaimers Contract
@@ -545,6 +629,34 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 }
 ```
 
+---
+
+### Domain 12: SuperAdmin Authentication & Google Identity Provider
+*Authentication Mechanism*: Google OAuth 2.0 via Firebase Client SDK / Firebase Auth (`signInWithPopup(auth, provider)`).
+
+| Identity Class | Authority Criterion | Role Claim | Capabilities |
+| :--- | :--- | :--- | :--- |
+| **SuperAdmin** | Firebase Admin service email (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified bootstrap admin emails (`admin@lawyerselect.com.au`, `superadmin@lawyerselect.com.au`, `support@aifoundation.net.au`), or verified token custom claims (`superadmin: true`). | `superadmin` | Catalog item CRUD, token price setting, platform settings override, manual approval of law firms & individual practitioners, dispute & refund processing. |
+| **Standard User / Client** | Any standard Google account authenticated via popup. | `client` | Inquiries, AI matching, case posting, chat, and review. |
+| **Guest / Anonymous** | Unauthenticated visitor. Clean UI with zero mock badges. Google login icon displayed in far right header. | `guest` | Read-only directory and legal corpus explorer access. |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SuperAdminIdentityContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["uid", "email", "role", "isSuperAdmin"],
+  "properties": {
+    "uid": { "type": "string" },
+    "email": { "type": "string", "format": "email" },
+    "displayName": { "type": "string" },
+    "role": { "type": "string", "enum": ["superadmin", "lawyer", "client", "guest"] },
+    "photoURL": { "type": "string" },
+    "isSuperAdmin": { "type": "boolean" }
+  }
+}
+```
 ---
 
 ### Domain 11: Individual Practitioner Registration & KYC Profile (`practitioner_registrations`)
@@ -750,4 +862,32 @@ The application operates within Google Cloud Firestore (`ai-foundation-firebase`
 }
 ```
 
+---
+
+### Domain 12: SuperAdmin Authentication & Google Identity Provider
+*Authentication Mechanism*: Google OAuth 2.0 via Firebase Client SDK / Firebase Auth (`signInWithPopup(auth, provider)`).
+
+| Identity Class | Authority Criterion | Role Claim | Capabilities |
+| :--- | :--- | :--- | :--- |
+| **SuperAdmin** | Firebase Admin service email (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified bootstrap admin emails (`admin@lawyerselect.com.au`, `superadmin@lawyerselect.com.au`, `support@aifoundation.net.au`), or verified token custom claims (`superadmin: true`). | `superadmin` | Catalog item CRUD, token price setting, platform settings override, manual approval of law firms & individual practitioners, dispute & refund processing. |
+| **Standard User / Client** | Any standard Google account authenticated via popup. | `client` | Inquiries, AI matching, case posting, chat, and review. |
+| **Guest / Anonymous** | Unauthenticated visitor. Clean UI with zero mock badges. Google login icon displayed in far right header. | `guest` | Read-only directory and legal corpus explorer access. |
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SuperAdminIdentityContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["uid", "email", "role", "isSuperAdmin"],
+  "properties": {
+    "uid": { "type": "string" },
+    "email": { "type": "string", "format": "email" },
+    "displayName": { "type": "string" },
+    "role": { "type": "string", "enum": ["superadmin", "lawyer", "client", "guest"] },
+    "photoURL": { "type": "string" },
+    "isSuperAdmin": { "type": "boolean" }
+  }
+}
+```
 

@@ -1,7 +1,7 @@
-import { Scale, Briefcase, FileText, Sparkles, MessageSquare, Users, Shield, UserCheck, ArrowRightLeft, BookOpen, User, LogOut } from './icons';
+import { Scale, Sparkles, MessageSquare, Users, Shield, UserCheck, BookOpen, User, LogOut, GoogleIcon } from './icons';
 import { useAuth } from '../context/AuthContext';
 
-export type ActiveTab = 'matchmaker' | 'caseboard' | 'postcase' | 'onboarding' | 'chat' | 'directory' | 'corpus';
+export type ActiveTab = 'matchmaker' | 'onboarding' | 'chat' | 'directory' | 'corpus';
 export type UserPersona = 'client' | 'lawyer';
 
 interface NavbarProps {
@@ -19,7 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setUserPersona,
   unreadChatCount,
 }) => {
-  const { currentUser, role, isAuthenticated, signOut, setShowAuthModal } = useAuth();
+  const { currentUser, role, isAuthenticated, signOut, signInWithGoogle, setShowAuthModal } = useAuth();
   return (
     <header style={{
       position: 'sticky',
@@ -110,50 +110,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Sparkles size={15} />
             <span>AI Match (Top 3)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('caseboard')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.5rem 0.9rem',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              border: 'none',
-              background: activeTab === 'caseboard' ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-              color: activeTab === 'caseboard' ? '#60a5fa' : 'var(--text-muted)',
-              borderBottom: activeTab === 'caseboard' ? '1px solid #3b82f6' : '1px solid transparent',
-              transition: 'all 0.2s',
-            }}
-          >
-            <Briefcase size={15} />
-            <span>Case Feed ($20 Leads)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('postcase')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.5rem 0.9rem',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              border: 'none',
-              background: activeTab === 'postcase' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-              color: activeTab === 'postcase' ? '#34d399' : 'var(--text-muted)',
-              borderBottom: activeTab === 'postcase' ? '1px solid #10b981' : '1px solid transparent',
-              transition: 'all 0.2s',
-            }}
-          >
-            <FileText size={15} />
-            <span>Post a Legal Matter</span>
           </button>
 
           <button
@@ -258,56 +214,67 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </nav>
 
-        {/* User Account & Role Widget */}
+        {/* Google Log In / SuperAdmin Account Widget (Far Right) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           {isAuthenticated && currentUser ? (
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.6rem',
+              gap: '0.65rem',
               background: 'rgba(10, 14, 23, 0.9)',
-              border: '1px solid var(--border-subtle)',
+              border: currentUser.isSuperAdmin ? '1px solid var(--border-gold)' : '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-md)',
               padding: '0.35rem 0.75rem',
             }}>
-              <div style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                background: currentUser.role === 'lawyer' ? 'rgba(229, 169, 60, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                border: currentUser.role === 'lawyer' ? '1px solid var(--border-gold)' : '1px solid var(--accent-blue)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: currentUser.role === 'lawyer' ? 'var(--gold-light)' : '#93c5fd',
-              }}>
-                <User size={15} />
-              </div>
+              {currentUser.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.displayName}
+                  style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }}
+                />
+              ) : (
+                <div style={{
+                  width: '26px',
+                  height: '26px',
+                  borderRadius: '50%',
+                  background: currentUser.isSuperAdmin ? 'rgba(229, 169, 60, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                  border: currentUser.isSuperAdmin ? '1px solid var(--border-gold)' : '1px solid var(--accent-blue)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: currentUser.isSuperAdmin ? 'var(--gold-light)' : '#93c5fd',
+                }}>
+                  <User size={14} />
+                </div>
+              )}
 
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
-                  {currentUser.displayName}
+                  {currentUser.displayName || currentUser.email}
                 </span>
-                <span style={{
-                  fontSize: '0.65rem',
-                  textTransform: 'uppercase',
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  color: currentUser.role === 'lawyer' ? 'var(--gold-light)' : '#93c5fd',
-                }}>
-                  {currentUser.role === 'lawyer' ? 'Verified Practitioner' : 'Consumer Client'}
-                </span>
+                {currentUser.isSuperAdmin ? (
+                  <span style={{
+                    fontSize: '0.62rem',
+                    textTransform: 'uppercase',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    color: 'var(--gold-light)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                  }}>
+                    <Shield size={10} style={{ color: 'var(--gold-light)' }} />
+                    SuperAdmin
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: '0.62rem',
+                    color: 'var(--text-dim)',
+                  }}>
+                    {currentUser.email}
+                  </span>
+                )}
               </div>
-
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="btn-ghost"
-                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
-                title="Switch account persona"
-              >
-                <ArrowRightLeft size={11} />
-                <span>Switch</span>
-              </button>
 
               <button
                 onClick={signOut}
@@ -315,20 +282,39 @@ export const Navbar: React.FC<NavbarProps> = ({
                 style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', color: '#f87171' }}
                 title="Sign Out"
               >
-                <LogOut size={12} />
+                <LogOut size={13} />
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="btn-gold"
-                style={{ padding: '0.45rem 1rem', fontSize: '0.82rem' }}
-              >
-                <User size={14} />
-                <span>Sign In / Join</span>
-              </button>
-            </div>
+            <button
+              onClick={signInWithGoogle}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.55rem',
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.22)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.45rem 0.95rem',
+                color: '#ffffff',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.14)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.22)';
+              }}
+              title="Sign In with Google"
+            >
+              <GoogleIcon size={18} />
+              <span>Sign In with Google</span>
+            </button>
           )}
         </div>
       </div>

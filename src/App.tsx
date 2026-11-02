@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Navbar, ActiveTab, UserPersona } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { AiMatchmaker } from './components/AiMatchmaker';
-import { MarketplaceCaseBoard } from './components/MarketplaceCaseBoard';
-import { PostCaseIntake } from './components/PostCaseIntake';
 import { AiLawyerOnboarding } from './components/AiLawyerOnboarding';
 import { ChatMessenger } from './components/ChatMessenger';
 import { LegalDirectory } from './components/LegalDirectory';
@@ -103,9 +101,9 @@ function AppContent() {
 
   // Handler: Select a lawyer from Matchmaker or Directory to open private chat
   const handleOpenChatWithLawyer = (lawyer: LegalProfessional, caseId?: string) => {
-    const clientId = currentUser ? currentUser.uid : 'client_guest_user';
-    const clientName = currentUser ? currentUser.displayName : 'Guest User';
-    const clientEmail = currentUser ? currentUser.email : 'guest@lawyerselect.com.au';
+    const clientId = currentUser ? currentUser.uid : 'client_user';
+    const clientName = currentUser ? currentUser.displayName : 'Client';
+    const clientEmail = currentUser ? currentUser.email : 'client@lawyerselect.com.au';
 
     const interaction = lawyerSelectStore.createOrGetChatInteraction(
       clientId,
@@ -156,7 +154,6 @@ function AppContent() {
                 const el = document.getElementById('ai-match-container');
                 el?.scrollIntoView({ behavior: 'smooth' });
               }}
-              onPostCaseClick={() => setActiveTab('postcase')}
             />
             <div id="ai-match-container">
               <AiMatchmaker
@@ -165,22 +162,6 @@ function AppContent() {
               />
             </div>
           </>
-        )}
-
-        {activeTab === 'caseboard' && (
-          <MarketplaceCaseBoard
-            cases={cases}
-            currentLawyer={currentLawyer}
-            onOpenChatWithClient={handleOpenChatWithCaseClient}
-          />
-        )}
-
-        {activeTab === 'postcase' && (
-          <PostCaseIntake
-            onCasePosted={(newCase) => {
-              setActiveTab('caseboard');
-            }}
-          />
         )}
 
         {activeTab === 'onboarding' && (
@@ -270,7 +251,7 @@ function AppContent() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 <Lock size={14} style={{ color: 'var(--gold-light)' }} />
-                <span>Stripe PCI DSS Level 1 Lead Checkout</span>
+                <span>Stripe PCI DSS Level 1 Secure Payments</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 <Sparkles size={14} style={{ color: '#60a5fa' }} />

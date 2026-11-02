@@ -1,18 +1,19 @@
 # Lawyer Select - Next Instructions & Worklist
 
 ## Current Status
+- Decommissioned Case Leads: Removed Case Feed ($20 Leads), Post a Legal Matter tab, and all case lead exchange buttons/cards from Navbar, HeroBanner, and App.
+- Focused Service Model: Retained AI Top 3 Matchmaker, Legal Professional/Firm AI Onboarding, Direct Chat, Lawyer Directory, and Open Australian Legal Corpus Library.
+- Authentication UI: Removed "Guest Client", "Consumer Client", and "Switch" buttons.
+- Google Sign-In: Added Google login icon to the far right header.
+- SuperAdmin Authorization: Configured `isSuperAdminEmail` verifying Firebase Admin account (`firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com`), verified admin addresses, and displaying gold SuperAdmin badge only for authorized superadmins.
+- Drive Lock: Project strictly bound to drive `E:\` only. Drive `Z:\` completely bypassed.
+- IDE Terminal Config: Added `.vscode/settings.json` configuring Command Prompt as default profile with shell integration disabled.
 - Git Remote: Configured for `https://github.com/aifoundationau/lawyer.git` (`origin`) in `.git/config`.
 - Security Lock: `.gitignore` secures all `.env*`, keys, service account credentials, logs, and audit files.
 - Database: Connected to Firebase Project `ai-foundation-firebase`, named Firestore database `lawyerselect` (nam5).
-- TypeScript & Build: Passing cleanly (`npm run build` completed with 0 errors).
-- Data Contracts: Documented in `data-contracts.md` covering Domains 1 to 11.
-- Firestore Security Rules: Checked and up to date in `firestore.rules` for all 10 collections.
-- Services & Store: `extractLawFirmInformationSheet` and `extractPractitionerInformationSheet` ready in `geminiService.ts` and `lawyerSelectStore.ts`.
 
 ## Next Steps
-1. User stages and pushes the commit to `https://github.com/aifoundationau/lawyer.git`.
-2. Developer starts dev server via `npm run dev` in IDE terminal to monitor edits.
+1. User commits and pushes the clean updates to GitHub: `https://github.com/aifoundationau/lawyer.git`.
+2. Developer runs `npm run dev` in Command Prompt terminal.
 3. Request user permission to apply the UI updates for the Dual Registration Form (Law Firm vs Individual Practitioner) with the unified AI "One Blob" input box and 4-pillar editable Information Sheet.
 4. Present one task/instruction at a time to the user.
-5. Upon approval, implement the UI updates in `AiLawyerOnboarding.tsx` and integrate the Geolocation / Currency bar in `Navbar.tsx`.
-6. Verify end-to-end functionality in the running dev server.

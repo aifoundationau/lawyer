@@ -1,12 +1,11 @@
 import React from 'react';
-import { Sparkles, ShieldCheck, Scale, Zap, DollarSign, Lock } from './icons';
+import { Sparkles, ShieldCheck, Scale, Zap, Lock } from './icons';
 
 interface HeroBannerProps {
   onSearchClick: () => void;
-  onPostCaseClick: () => void;
 }
 
-export const HeroBanner: React.FC<HeroBannerProps> = ({ onSearchClick, onPostCaseClick }) => {
+export const HeroBanner: React.FC<HeroBannerProps> = ({ onSearchClick }) => {
   return (
     <div style={{
       position: 'relative',
@@ -53,8 +52,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSearchClick, onPostCas
           lineHeight: 1.6,
         }}>
           Not just lawyers — connect with certified Barristers, Solicitors, Conveyancers, Mediators, 
-          Notaries, Migration Agents, and Patent Attorneys. Tell our AI your legal dispute, get the 
-          <strong> top 3 curated specialists</strong>, or place your matter in our <strong>$20 flat-fee case exchange</strong>.
+          Notaries, Migration Agents, and Patent Attorneys. Tell our AI your legal dispute and get the 
+          <strong> top 3 curated specialists</strong> suited to your needs.
         </p>
 
         {/* CTA Buttons */}
@@ -66,21 +65,16 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSearchClick, onPostCas
           flexWrap: 'wrap',
           marginBottom: '3rem',
         }}>
-          <button onClick={onSearchClick} className="btn-gold" style={{ padding: '0.85rem 1.8rem', fontSize: '1rem' }}>
+          <button onClick={onSearchClick} className="btn-gold" style={{ padding: '0.85rem 2rem', fontSize: '1rem' }}>
             <Sparkles size={18} />
             <span>Find Best 3 Lawyers with AI</span>
-          </button>
-          
-          <button onClick={onPostCaseClick} className="btn-ghost" style={{ padding: '0.85rem 1.8rem', fontSize: '1rem' }}>
-            <Scale size={18} style={{ color: 'var(--gold-primary)' }} />
-            <span>Place Case in $20 Lead Exchange</span>
           </button>
         </div>
 
         {/* Feature Highlights Grid */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
           gap: '1rem',
           textAlign: 'left',
         }}>
@@ -117,18 +111,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSearchClick, onPostCas
             </div>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               Initial contact strictly occurs through Firebase chat interactions. Only clients who select a lawyer can initiate contact.
-            </p>
-          </div>
-
-          <div className="glass-panel" style={{ padding: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-              <div style={{ padding: '0.5rem', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
-                <DollarSign size={20} />
-              </div>
-              <h4 style={{ color: '#fff', fontSize: '1rem', fontWeight: 700 }}>$20 Flat-Fee Leads</h4>
-            </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Legal professionals browse anonymous summaries and unlock verified client cases for a single flat fee of $20 via Stripe.
             </p>
           </div>
         </div>

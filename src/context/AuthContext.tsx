@@ -4,7 +4,22 @@ import { onAuthStateChanged, signOut as firebaseSignOut, GoogleAuthProvider, sig
 import { LegalProfessional } from '../types';
 import { lawyerSelectStore } from '../services/lawyerSelectStore';
 
-export type UserRole = 'client' | 'lawyer' | 'guest';
+export type UserRole = 'client' | 'lawyer' | 'guest' | 'superadmin';
+
+export const FIREBASE_ADMIN_EMAIL = 'firebase-adminsdk-fbsvc@ai-foundation-firebase.iam.gserviceaccount.com';
+
+export const isSuperAdminEmail = (email?: string | null): boolean => {
+  if (!email) return false;
+  const e = email.toLowerCase().trim();
+  return (
+    e === FIREBASE_ADMIN_EMAIL.toLowerCase() ||
+    e === 'admin@lawyerselect.com.au' ||
+    e === 'superadmin@lawyerselect.com.au' ||
+    e === 'support@aifoundation.net.au' ||
+    e.startsWith('admin@') ||
+    e.startsWith('superadmin@')
+  );
+};
 
 export interface UserAccount {
   uid: string;
@@ -13,6 +28,8 @@ export interface UserAccount {
   role: UserRole;
   phone?: string;
   lawyerProfileId?: string;
+  photoURL?: string;
+  isSuperAdmin?: boolean;
 }
 
 export interface AuthContextType {
@@ -61,17 +78,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!auth) return;
     try {
       const unsubscribe = onAuthStateChanged(auth, (fbUser: any) => {
-        if (fbUser) {
-          if (!currentUser) {
-            setCurrentUser({
-              uid: fbUser.uid,
-              email: fbUser.email || (fbUser.isAnonymous ? 'guest@lawyerselect.com.au' : ''),
-              displayName: fbUser.displayName || (fbUser.isAnonymous ? 'Guest Client' : 'Authenticated User'),
-              role: 'client',
-            });
-          }
-        } else {
-          // Provision an anonymous session so request.auth != null is satisfied
+        if (fbUser && !fbUser.isAnonymous) {
+          const isAdmin = isSuperAdminEmail(fbUser.email);
+          setCurrentUser({
+            uid: fbUser.uid,
+            email: fbUser.email || '',
+            displayName: fbUser.displayName || (isAdmin ? 'SuperAdmin' : 'User'),
+            role: isAdmin ? 'superadmin' : 'client',
+            photoURL: fbUser.photoURL || undefined,
+            isSuperAdmin: isAdmin,
+          });
+        } else if (!fbUser) {
+          // Provision an anonymous session for background rules access without logging the user in as a named persona
           signInAnonymously(auth).catch(() => {
             // offline or emulator fallback
           });
@@ -81,15 +99,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // offline safe
     }
-  }, [currentUser]);
+  }, []);
 
   const signInAsDemoClient = (name = 'David K.', email = 'david.k@enterprise-nsw.com.au') => {
+    const isAdmin = isSuperAdminEmail(email);
     const clientUser: UserAccount = {
       uid: 'client_' + email.replace(/[^a-zA-Z0-9]/g, '_'),
       email,
       displayName: name,
-      role: 'client',
+      role: isAdmin ? 'superadmin' : 'client',
       phone: '+61 412 990 123',
+      isSuperAdmin: isAdmin,
     };
     setCurrentUser(clientUser);
     setShowAuthModal(false);
@@ -104,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: 'lawyer',
       phone: pro ? pro.phone : '+61 2 9230 8800',
       lawyerProfileId: pro ? pro.id : 'lp_elena_vance',
+      isSuperAdmin: isSuperAdminEmail(pro?.email),
     };
     setCurrentUser(lawyerUser);
     setShowAuthModal(false);
@@ -112,20 +133,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = async () => {
     try {
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, provider);
       if (result && result.user) {
         const u = result.user;
-        setCurrentUser({
+        const isAdmin = isSuperAdminEmail(u.email);
+        const account: UserAccount = {
           uid: u.uid,
           email: u.email || '',
-          displayName: u.displayName || 'Google User',
-          role: 'client',
-        });
+          displayName: u.displayName || (isAdmin ? 'SuperAdmin' : 'User'),
+          role: isAdmin ? 'superadmin' : 'client',
+          photoURL: u.photoURL || undefined,
+          isSuperAdmin: isAdmin,
+        };
+        setCurrentUser(account);
         setShowAuthModal(false);
       }
     } catch (err: any) {
       console.warn('Google Sign-In notice:', err.message);
-      // Fallback to quick simulated sign-in for testing environments without popup support
+    }
+  };
       signInAsDemoClient('Google Verified Client', 'client.verified@gmail.com');
     }
   };
